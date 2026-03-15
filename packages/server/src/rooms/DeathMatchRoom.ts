@@ -1,7 +1,7 @@
 import { Room, Client } from 'colyseus';
-import { GameRoomState, PlayerSchema, ProjectileSchema, BotSchema, EnergyDrinkSchema, WeaponPickupSchema } from '../schemas/GameState';
-import { WEAPONS, PICKUP_WEAPON_IDS, NUM_WEAPON_PICKUPS, WEAPON_PICKUP_RADIUS, WEAPON_RESPAWN_DELAY } from '@watergun/shared';
-import type { WeaponId } from '@watergun/shared';
+import { GameRoomState, PlayerSchema, ProjectileSchema, BotSchema, EnergyDrinkSchema, WeaponPickupSchema, HealthPackSchema } from '../schemas/GameState';
+import { WEAPONS, PICKUP_WEAPON_IDS, NUM_WEAPON_PICKUPS, WEAPON_PICKUP_RADIUS, WEAPON_RESPAWN_DELAY, MAPS, DEFAULT_MAP } from '@watergun/shared';
+import type { WeaponId, MapId, MapCoverBox } from '@watergun/shared';
 
 const MAP_SIZE = 40;
 const PLAYER_SPEED = 8;
@@ -16,12 +16,7 @@ const PLAYER_COLORS = ['#4fc3f7', '#f44336', '#e91e63', '#9c27b0', '#ff9800', '#
 const BOT_COLORS = ['#f44336', '#e91e63', '#9c27b0', '#ff9800', '#ffeb3b', '#8bc34a'];
 const BOT_NAMES = ['Splasher', 'Drizzle', 'Tsunami', 'Squirt', 'Puddle', 'Soaker'];
 
-const EDGE_SPAWNS = [
-  { x: -17, z: -17 }, { x: 17, z: -17 },
-  { x: -17, z: 17 }, { x: 17, z: 17 },
-];
-
-const SPAWN_PROTECTION_TIME = 5; // seconds of invulnerability after spawn
+const SPAWN_PROTECTION_TIME = 3; // seconds of invulnerability after spawn
 
 const NUM_ENERGY_DRINKS = 3;
 const SPEED_BOOST_DURATION = 5; // seconds
@@ -30,52 +25,49 @@ const SPEED_BOOST_MULTIPLIER = 1.6;
 const DRINK_PICKUP_RADIUS = 1.5;
 const DRINK_RESPAWN_DELAY = 8; // seconds before a new drink spawns after pickup
 
-// Collision boxes matching client SceneManager.buildMap()
-// Each box: { minX, maxX, minZ, maxZ, height }
+const NUM_HEALTH_PACKS = 3;
+const HEALTH_PACK_HEAL = 40;
+const HEALTH_PACK_PICKUP_RADIUS = 1.5;
+const HEALTH_PACK_RESPAWN_DELAY = 10;
+
 interface CollisionBox {
   minX: number; maxX: number;
   minZ: number; maxZ: number;
   height: number;
 }
 
-function box(x: number, z: number, w: number, h: number, d: number): CollisionBox {
-  return { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, height: h };
+function boxFromCover(c: MapCoverBox): CollisionBox {
+  return { minX: c.x - c.w / 2, maxX: c.x + c.w / 2, minZ: c.z - c.d / 2, maxZ: c.z + c.d / 2, height: c.h };
 }
 
-const COLLISION_BOXES: CollisionBox[] = [
-  // Boundary walls
-  box(0, -20, 40, 4, 0.5),
-  box(0, 20, 40, 4, 0.5),
-  box(-20, 0, 0.5, 4, 40),
-  box(20, 0, 0.5, 4, 40),
-  // Cover objects (matching client SceneManager)
-  box(-8, -8, 3, 2.5, 0.5),
-  box(8, 8, 3, 2.5, 0.5),
-  box(-6, 6, 0.5, 2.5, 3),
-  box(6, -6, 0.5, 2.5, 3),
-  box(0, 0, 2, 1.5, 2),
-  box(-12, 0, 4, 3, 0.5),
-  box(12, 0, 4, 3, 0.5),
-  box(0, -12, 0.5, 3, 4),
-  box(-5, -14, 2, 2, 2),
-  box(5, 14, 2, 2, 2),
-  box(4, 0, 2, 1, 2),
-  box(-4, 0, 2, 1, 2),
-  box(0, 5, 2, 1.2, 2),
-  box(0, -5, 2, 1.2, 2),
-  box(10, -10, 2, 1.5, 2),
-  box(-10, 10, 2, 1.5, 2),
-  box(6, 3, 0.5, 2.5, 4),
-  box(-6, -3, 0.5, 2.5, 4),
-  box(3, -9, 1.5, 1, 1.5),
-  box(-3, 9, 1.5, 1, 1.5),
-  box(15, 5, 2, 1.5, 2),
-  box(-15, -5, 2, 1.5, 2),
-  box(10, 4, 3, 2, 0.5),
-  box(11.25, 5.5, 0.5, 2, 3),
-  box(-10, -4, 3, 2, 0.5),
-  box(-11.25, -5.5, 0.5, 2, 3),
-];
+function buildCollisionBoxes(mapId: MapId): CollisionBox[] {
+  const mapDef = MAPS[mapId];
+  const half = MAP_SIZE / 2;
+  const boxes: CollisionBox[] = [
+    // Boundary walls (always present)
+    { minX: -half, maxX: half, minZ: -half - 0.25, maxZ: -half + 0.25, height: 4 },
+    { minX: -half, maxX: half, minZ: half - 0.25, maxZ: half + 0.25, height: 4 },
+    { minX: -half - 0.25, maxX: -half + 0.25, minZ: -half, maxZ: half, height: 4 },
+    { minX: half - 0.25, maxX: half + 0.25, minZ: -half, maxZ: half, height: 4 },
+  ];
+  for (const c of mapDef.covers) {
+    boxes.push(boxFromCover(c));
+  }
+  // Floor sections (elevated walkable areas)
+  if (mapDef.floors) {
+    for (const f of mapDef.floors) {
+      const thickness = f.thickness ?? 0.3;
+      boxes.push({
+        minX: f.x - f.w / 2,
+        maxX: f.x + f.w / 2,
+        minZ: f.z - f.d / 2,
+        maxZ: f.z + f.d / 2,
+        height: f.height + thickness / 2,
+      });
+    }
+  }
+  return boxes;
+}
 
 interface PlayerInput {
   seq: number;
@@ -101,14 +93,22 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   private playerInputs: Map<string, PlayerInput> = new Map();
   private drinkCounter = 0;
   private drinkRespawnTimers: number[] = [];
+  private healthPackCounter = 0;
+  private healthPackRespawnTimers: number[] = [];
   private weaponPickupCounter = 0;
   private weaponRespawnTimers: number[] = [];
+  private mapId: MapId = DEFAULT_MAP;
+  private collisionBoxes: CollisionBox[] = [];
+  private edgeSpawns: { x: number; z: number }[] = [];
 
-  onCreate(options: { roomCode?: string; numBots?: number }) {
+  onCreate(options: { roomCode?: string; numBots?: number; mapId?: string }) {
     this.setState(new GameRoomState());
     this.maxClients = 8;
     const numBots = Math.max(0, Math.min(5, options.numBots ?? NUM_BOTS));
-    console.log(`[Room ${this.roomId}] Created with roomCode="${options.roomCode || '1'}", numBots=${numBots}`);
+    this.mapId = (options.mapId && options.mapId in MAPS) ? options.mapId as MapId : DEFAULT_MAP;
+    this.collisionBoxes = buildCollisionBoxes(this.mapId);
+    this.edgeSpawns = MAPS[this.mapId].spawns;
+    console.log(`[Room ${this.roomId}] Created with roomCode="${options.roomCode || '1'}", numBots=${numBots}, map=${this.mapId}`);
 
     this.setMetadata({ roomCode: options.roomCode || '1' });
 
@@ -132,6 +132,11 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       this.spawnEnergyDrink();
     }
 
+    // Spawn health packs
+    for (let i = 0; i < NUM_HEALTH_PACKS; i++) {
+      this.spawnHealthPack();
+    }
+
     // Spawn weapon pickups
     for (let i = 0; i < NUM_WEAPON_PICKUPS; i++) {
       this.spawnWeaponPickup();
@@ -152,7 +157,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         const dx = input.px - player.x;
         const dz = input.pz - player.z;
         const dist = Math.sqrt(dx * dx + dz * dz);
-        if (dist < 5) { // Allow up to 5 units of desync correction
+        if (dist < 15) { // Allow up to 15 units of desync correction (speed boost + lag)
           player.x = input.px;
           player.y = input.py;
           player.z = input.pz;
@@ -230,11 +235,14 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.tickInterval = setInterval(() => this.gameTick(), 50);
   }
 
-  onJoin(client: Client, options: { name?: string; color?: string }) {
+  onJoin(client: Client, options: { name?: string; color?: string; pantsColor?: string; hat?: string; sunglasses?: boolean }) {
     const player = new PlayerSchema();
     player.id = client.sessionId;
     player.name = options.name || `Player ${this.state.players.size + 1}`;
     player.color = options.color || PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
+    player.pantsColor = options.pantsColor || '#2196f3';
+    player.hat = options.hat || 'none';
+    player.sunglasses = options.sunglasses || false;
     player.health = MAX_HEALTH;
     player.spawnProtection = SPAWN_PROTECTION_TIME;
 
@@ -337,6 +345,24 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         });
       }
 
+      // Check health pack pickup
+      if (player.health < MAX_HEALTH) {
+        const pickedUpHealthPacks: string[] = [];
+        this.state.healthPacks.forEach((pack, packId) => {
+          const dx = player.x - pack.x;
+          const dz = player.z - pack.z;
+          if (Math.sqrt(dx * dx + dz * dz) < HEALTH_PACK_PICKUP_RADIUS) {
+            player.health = Math.min(MAX_HEALTH, player.health + HEALTH_PACK_HEAL);
+            pickedUpHealthPacks.push(packId);
+            this.healthPackRespawnTimers.push(HEALTH_PACK_RESPAWN_DELAY);
+            this.broadcast('healthPickup', { playerName: player.name, healed: HEALTH_PACK_HEAL });
+          }
+        });
+        for (const id of pickedUpHealthPacks) {
+          this.state.healthPacks.delete(id);
+        }
+      }
+
       // Check weapon pickup (collect IDs first to avoid delete-during-iterate)
       const pickedUpWeapons: string[] = [];
       this.state.weaponPickups.forEach((pickup, pickupId) => {
@@ -370,6 +396,15 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (this.weaponRespawnTimers[i] <= 0) {
         this.weaponRespawnTimers.splice(i, 1);
         this.spawnWeaponPickup();
+      }
+    }
+
+    // Health pack respawn timers
+    for (let i = this.healthPackRespawnTimers.length - 1; i >= 0; i--) {
+      this.healthPackRespawnTimers[i] -= dt;
+      if (this.healthPackRespawnTimers[i] <= 0) {
+        this.healthPackRespawnTimers.splice(i, 1);
+        this.spawnHealthPack();
       }
     }
 
@@ -440,6 +475,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         id: p.id, name: p.name, x: p.x, y: p.y, z: p.z,
         rotY: p.rotY, rotX: p.rotX, health: p.health,
         kills: p.kills, deaths: p.deaths, color: p.color,
+        pantsColor: p.pantsColor, hat: p.hat, sunglasses: p.sunglasses,
         isShooting: p.isShooting, isDead: p.isDead,
         spawnProtection: p.spawnProtection,
         speedBoostTimer: p.speedBoostTimer,
@@ -476,7 +512,12 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       weaponPickupsData[id] = { id: wp.id, x: wp.x, z: wp.z, weaponId: wp.weaponId };
     });
 
-    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData, energyDrinks: drinksData, weaponPickups: weaponPickupsData });
+    const healthPacksData: Record<string, any> = {};
+    this.state.healthPacks.forEach((hp, id) => {
+      healthPacksData[id] = { id: hp.id, x: hp.x, z: hp.z };
+    });
+
+    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData, energyDrinks: drinksData, weaponPickups: weaponPickupsData, healthPacks: healthPacksData });
   }
 
   private updateBot(bot: BotSchema, dt: number) {
@@ -668,7 +709,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
 
   /** Resolve entity collision against all wall/cover boxes */
   private resolveCollision(x: number, z: number, radius: number, entityY: number): { x: number; z: number } {
-    for (const box of COLLISION_BOXES) {
+    for (const box of this.collisionBoxes) {
       // Skip if entity is standing on top of the box
       if (entityY >= box.height - 0.1) continue;
 
@@ -695,7 +736,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
 
   /** Check if a line segment hits any wall (for projectile-wall collision) */
   private segmentHitsWall(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): boolean {
-    for (const box of COLLISION_BOXES) {
+    for (const box of this.collisionBoxes) {
       if (this.rayIntersectsAABB(x1, y1, z1, x2, y2, z2,
           box.minX, 0, box.minZ, box.maxX, box.height, box.maxZ)) {
         return true;
@@ -830,7 +871,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   }
 
   private getEdgeSpawn(): { x: number; z: number } {
-    const spawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
+    const spawn = this.edgeSpawns[Math.floor(Math.random() * this.edgeSpawns.length)];
     return {
       x: spawn.x + (Math.random() - 0.5) * 3,
       z: spawn.z + (Math.random() - 0.5) * 3,
@@ -847,7 +888,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   }
 
   private isInsideCollisionBox(x: number, z: number, margin: number = 1.0): boolean {
-    for (const box of COLLISION_BOXES) {
+    for (const box of this.collisionBoxes) {
       if (x >= box.minX - margin && x <= box.maxX + margin &&
           z >= box.minZ - margin && z <= box.maxZ + margin) {
         return true;
@@ -868,5 +909,17 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (!this.isInsideCollisionBox(pickup.x, pickup.z)) break;
     }
     this.state.weaponPickups.set(pickup.id, pickup);
+  }
+
+  private spawnHealthPack(): void {
+    const half = MAP_SIZE / 2 - 3;
+    const pack = new HealthPackSchema();
+    pack.id = `hp_${++this.healthPackCounter}`;
+    for (let attempt = 0; attempt < 20; attempt++) {
+      pack.x = (Math.random() - 0.5) * half * 2;
+      pack.z = (Math.random() - 0.5) * half * 2;
+      if (!this.isInsideCollisionBox(pack.x, pack.z)) break;
+    }
+    this.state.healthPacks.set(pack.id, pack);
   }
 }

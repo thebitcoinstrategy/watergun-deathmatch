@@ -85,6 +85,113 @@ body {
 #crosshair .ch-left { right: calc(50% + 3px); }
 #crosshair .ch-right { left: calc(50% + 3px); }
 
+/* === SNIPER SCOPE === */
+#sniper-scope {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9998;
+  pointer-events: none;
+}
+
+.scope-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 70vmin;
+  height: 70vmin;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 3px solid rgba(0, 0, 0, 0.9);
+  box-shadow: 0 0 0 3px rgba(100, 200, 255, 0.15), inset 0 0 40px rgba(0, 150, 255, 0.06);
+  background: transparent;
+  overflow: hidden;
+}
+
+.scope-crosshair-h {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.7);
+  transform: translateY(-0.5px);
+}
+
+.scope-crosshair-v {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  transform: translateX(-0.5px);
+}
+
+.scope-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px solid rgba(255, 50, 50, 0.9);
+  background: transparent;
+}
+
+.scope-range {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 30px;
+  height: 1px;
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.scope-range-1 { top: calc(50% + 15%); }
+.scope-range-2 { top: calc(50% + 25%); width: 20px; }
+.scope-range-3 { top: calc(50% + 35%); width: 14px; }
+
+/* Black overlay outside the scope circle */
+.scope-overlay-top,
+.scope-overlay-bottom {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+.scope-overlay-top {
+  top: 0;
+  height: calc(50% - 35vmin);
+}
+
+.scope-overlay-bottom {
+  bottom: 0;
+  height: calc(50% - 35vmin);
+}
+
+.scope-overlay-left,
+.scope-overlay-right {
+  position: absolute;
+  top: calc(50% - 35vmin);
+  height: 70vmin;
+  background: rgba(0, 0, 0, 0.95);
+}
+
+.scope-overlay-left {
+  left: 0;
+  width: calc(50% - 35vmin);
+}
+
+.scope-overlay-right {
+  right: 0;
+  width: calc(50% - 35vmin);
+}
+
 #health-bar {
   position: absolute;
   bottom: 30px;
@@ -323,7 +430,7 @@ body {
   align-items: center;
   justify-content: flex-end;
   padding-bottom: 60px;
-  background: url('/splash.png') center center / cover no-repeat;
+  background: url('/Untitled.jpg') center center / cover no-repeat;
   color: white;
   cursor: pointer;
   z-index: 10;
@@ -355,7 +462,7 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  background: url('/splash.png') center center / cover no-repeat;
+  background: url('/Untitled.jpg') center center / cover no-repeat;
   z-index: 15;
 }
 
@@ -371,6 +478,410 @@ body {
   overflow-y: auto;
   color: white;
   text-align: center;
+}
+
+.lobby-card-wide {
+  width: 820px;
+  max-width: 95vw;
+}
+
+.lobby-columns {
+  display: flex;
+  gap: 24px;
+  text-align: left;
+}
+
+.lobby-col-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.lobby-col-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+}
+
+.lobby-play-section {
+  width: 100%;
+  max-width: 210px;
+}
+
+.lobby-btn-row {
+  display: flex;
+  gap: 8px;
+}
+
+.lobby-btn-row .lobby-btn {
+  flex: 1;
+  padding: 10px 8px;
+  font-size: 14px;
+}
+
+#preview-canvas {
+  border-radius: 12px;
+  background: rgba(0,0,0,0.3);
+  border: 1px solid rgba(255,255,255,0.15);
+}
+
+.lobby-col-right {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Map grid */
+.map-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.map-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background: rgba(0,0,0,0.25);
+  cursor: pointer;
+  transition: border-color 0.15s, transform 0.15s, background 0.15s;
+}
+
+.map-card:hover {
+  background: rgba(255,255,255,0.08);
+  transform: scale(1.03);
+}
+
+.map-card.selected {
+  border-color: #4fc3f7;
+  background: rgba(79,195,247,0.12);
+}
+
+.map-card-icon {
+  width: 100%;
+  height: 56px;
+  border-radius: 5px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Aqua Park — green grass, blue sky, water pool, slide ramp, palm tree */
+.map-icon-aqua {
+  background: linear-gradient(180deg, #87ceeb 55%, #7cb342 55%);
+}
+.map-icon-aqua::before {
+  content: '';
+  position: absolute;
+  /* Water pool */
+  bottom: 4px; left: 50%; width: 28px; height: 8px;
+  transform: translateX(-50%);
+  background: #29b6f6;
+  border-radius: 2px;
+  /* Slide ramp on left */
+  box-shadow:
+    -30px -6px 0 0 #78909c,
+    -28px -10px 0 0 #78909c,
+    -26px -14px 0 0 #78909c,
+    /* Palm tree trunk */
+    28px -4px 0 0 #6d4c41,
+    28px -8px 0 0 #6d4c41,
+    28px -12px 0 0 #6d4c41,
+    /* Palm leaves */
+    24px -16px 0 1px #33691e,
+    28px -18px 0 1px #33691e,
+    32px -16px 0 1px #33691e,
+    /* Cover walls */
+    -8px -2px 0 0 #607d8b,
+    -8px -6px 0 0 #607d8b,
+    12px -2px 0 0 #607d8b,
+    12px -6px 0 0 #607d8b;
+}
+.map-icon-aqua::after {
+  content: '';
+  position: absolute;
+  /* Sun */
+  top: 5px; right: 6px;
+  width: 10px; height: 10px;
+  background: #fff176;
+  border-radius: 50%;
+  box-shadow: 0 0 6px 2px rgba(255,241,118,0.5);
+}
+
+/* Pirate Cove — sunset sky, sandy beach, ship, water */
+.map-icon-pirate {
+  background: linear-gradient(180deg, #ffcc80 30%, #d7ccc8 50%, #29b6f6 80%);
+}
+.map-icon-pirate::before {
+  content: '';
+  position: absolute;
+  /* Ship hull */
+  bottom: 14px; left: 50%; width: 30px; height: 8px;
+  transform: translateX(-50%);
+  background: #5d4037;
+  border-radius: 0 0 6px 6px;
+  /* Masts */
+  box-shadow:
+    -6px -10px 0 0 #4e342e,
+    -6px -14px 0 0 #4e342e,
+    -6px -18px 0 0 #4e342e,
+    6px -10px 0 0 #4e342e,
+    6px -14px 0 0 #4e342e,
+    /* Sails */
+    -6px -14px 0 2px rgba(255,255,255,0.6),
+    6px -12px 0 2px rgba(255,255,255,0.6),
+    /* Dock planks */
+    -24px 4px 0 1px #6d4c41,
+    -20px 4px 0 1px #6d4c41,
+    24px 4px 0 1px #6d4c41,
+    20px 4px 0 1px #6d4c41,
+    /* Tower */
+    -30px -6px 0 1px #5d4037,
+    -30px -10px 0 1px #5d4037,
+    -30px -14px 0 0 #5d4037;
+}
+.map-icon-pirate::after {
+  content: '';
+  position: absolute;
+  /* Sunset sun */
+  top: 2px; left: 50%;
+  width: 14px; height: 14px;
+  transform: translateX(-50%);
+  background: #ff8f00;
+  border-radius: 50%;
+  box-shadow: 0 0 8px 3px rgba(255,143,0,0.4);
+}
+
+/* Neon City — dark skyline, glowing neon buildings */
+.map-icon-neon {
+  background: linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 60%, #37474f 100%);
+}
+.map-icon-neon::before {
+  content: '';
+  position: absolute;
+  /* Buildings silhouettes */
+  bottom: 0; left: 4px;
+  width: 10px; height: 30px;
+  background: #263238;
+  box-shadow:
+    12px 6px 0 0 #263238,
+    12px 2px 0 0 #263238,
+    24px 10px 0 0 #263238,
+    36px 4px 0 0 #263238,
+    48px 12px 0 0 #263238,
+    48px 8px 0 0 #263238,
+    60px 2px 0 0 #263238,
+    /* Neon glow windows */
+    2px -4px 0 0 #00e5ff,
+    2px -10px 0 0 #e040fb,
+    14px -2px 0 0 #76ff03,
+    14px -6px 0 0 #00e5ff,
+    26px -4px 0 0 #ff4081,
+    38px -6px 0 0 #00e5ff,
+    38px -10px 0 0 #e040fb,
+    50px -2px 0 0 #76ff03,
+    62px -8px 0 0 #ff4081,
+    62px -4px 0 0 #00e5ff;
+}
+.map-icon-neon::after {
+  content: '';
+  position: absolute;
+  /* Neon sign glow on ground */
+  bottom: 0; left: 0;
+  width: 100%; height: 3px;
+  background: linear-gradient(90deg, #00e5ff, #e040fb, #76ff03, #ff4081, #00e5ff);
+  opacity: 0.7;
+}
+
+/* Sky Fortress — bright sky, floating platforms, clouds */
+.map-icon-sky {
+  background: linear-gradient(180deg, #64b5f6 0%, #81d4fa 40%, #b3e5fc 100%);
+}
+.map-icon-sky::before {
+  content: '';
+  position: absolute;
+  /* Central tower/pyramid */
+  bottom: 10px; left: 50%;
+  width: 12px; height: 18px;
+  transform: translateX(-50%);
+  background: #cfd8dc;
+  border-radius: 1px;
+  box-shadow:
+    /* Wider base */
+    -4px 8px 0 2px #b0bec5,
+    /* Floating platforms */
+    -22px 6px 0 2px #eceff1,
+    22px 4px 0 2px #eceff1,
+    -16px -2px 0 1px #eceff1,
+    16px -4px 0 1px #eceff1,
+    /* Bridge pillars */
+    -10px 6px 0 0 #cfd8dc,
+    10px 4px 0 0 #cfd8dc,
+    /* Clouds */
+    -24px -10px 0 3px rgba(255,255,255,0.7),
+    -20px -12px 0 4px rgba(255,255,255,0.7),
+    20px -8px 0 3px rgba(255,255,255,0.7),
+    24px -10px 0 4px rgba(255,255,255,0.7),
+    0px -14px 0 2px rgba(255,255,255,0.5);
+}
+.map-icon-sky::after {
+  content: '';
+  position: absolute;
+  /* Small cloud puff */
+  top: 6px; left: 8px;
+  width: 16px; height: 6px;
+  background: rgba(255,255,255,0.6);
+  border-radius: 6px;
+  box-shadow: 40px 4px 0 0 rgba(255,255,255,0.5);
+}
+
+/* Jungle Temple — green canopy, tiered pyramid, vines */
+.map-icon-jungle {
+  background: linear-gradient(180deg, #aed581 0%, #81c784 30%, #558b2f 55%, #33691e 100%);
+}
+.map-icon-jungle::before {
+  content: '';
+  position: absolute;
+  /* Pyramid tiers */
+  bottom: 4px; left: 50%;
+  width: 10px; height: 6px;
+  transform: translateX(-50%);
+  background: #795548;
+  box-shadow:
+    /* Wider tiers below */
+    0px 6px 0 3px #6d4c41,
+    0px 12px 0 6px #5d4037,
+    0px 16px 0 9px #4e342e,
+    /* Temple ruins */
+    -28px 10px 0 2px #795548,
+    -28px 6px 0 2px #795548,
+    28px 10px 0 2px #795548,
+    28px 6px 0 2px #795548,
+    /* Tree canopy */
+    -20px -8px 0 4px #2e7d32,
+    -14px -10px 0 3px #388e3c,
+    20px -6px 0 4px #2e7d32,
+    14px -8px 0 3px #388e3c,
+    -6px -12px 0 2px #43a047,
+    6px -14px 0 2px #43a047,
+    /* Tree trunks */
+    -20px 2px 0 0 #4e342e,
+    20px 4px 0 0 #4e342e;
+}
+.map-icon-jungle::after {
+  content: '';
+  position: absolute;
+  /* Mist/fog at bottom */
+  bottom: 0; left: 0;
+  width: 100%; height: 8px;
+  background: linear-gradient(0deg, rgba(129,199,132,0.5), transparent);
+}
+
+/* Mega Arena — orange sunset, fortress spire, multi-compound */
+.map-icon-mega {
+  background: linear-gradient(180deg, #e65100 0%, #bf360c 35%, #546e7a 60%, #37474f 100%);
+}
+.map-icon-mega::before {
+  content: '';
+  position: absolute;
+  /* Central fortress spire */
+  bottom: 6px; left: 50%;
+  width: 6px; height: 24px;
+  transform: translateX(-50%);
+  background: #455a64;
+  box-shadow:
+    /* Tiered base */
+    0px 10px 0 4px #546e7a,
+    0px 16px 0 8px #607d8b,
+    /* Corner compounds */
+    -26px 8px 0 3px #455a64,
+    -26px 4px 0 2px #455a64,
+    26px 8px 0 3px #4e342e,
+    26px 4px 0 2px #4e342e,
+    /* Turrets */
+    -26px -2px 0 1px #455a64,
+    26px -2px 0 1px #4e342e,
+    /* Obelisks */
+    -16px 2px 0 0 #607d8b,
+    16px 0px 0 0 #607d8b,
+    /* Bridge walkways */
+    -12px 6px 0 0 #607d8b,
+    -8px 6px 0 0 #607d8b,
+    8px 6px 0 0 #607d8b,
+    12px 6px 0 0 #607d8b;
+}
+.map-icon-mega::after {
+  content: '';
+  position: absolute;
+  /* Sunset sun */
+  top: 3px; left: 50%;
+  width: 16px; height: 8px;
+  transform: translateX(-50%);
+  background: #ff6d00;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 0 10px 3px rgba(255,109,0,0.4);
+}
+
+.map-card span {
+  font-size: 11px;
+  opacity: 0.85;
+  white-space: nowrap;
+}
+
+/* Hat picker */
+.hat-picker {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.hat-option {
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background: rgba(0,0,0,0.3);
+  cursor: pointer;
+  font-size: 12px;
+  color: rgba(255,255,255,0.8);
+  transition: border-color 0.15s, transform 0.15s;
+}
+
+.hat-option:hover {
+  transform: scale(1.05);
+}
+
+.hat-option.selected {
+  border-color: #4fc3f7;
+  background: rgba(79,195,247,0.15);
+}
+
+/* Sunglasses checkbox */
+.checkbox-label {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px !important;
+  opacity: 1 !important;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #4fc3f7;
+}
+
+/* Mobile: stack columns */
+@media (max-width: 700px) {
+  .lobby-card-wide { width: 380px; }
+  .lobby-columns { flex-direction: column; }
+  .lobby-col-center { order: -1; }
+  #preview-canvas { width: 160px; height: 220px; }
 }
 
 .lobby-card h1 {

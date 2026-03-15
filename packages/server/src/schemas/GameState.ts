@@ -12,6 +12,9 @@ export class PlayerSchema extends Schema {
   @type('number') kills: number = 0;
   @type('number') deaths: number = 0;
   @type('string') color: string = '#4fc3f7';
+  @type('string') pantsColor: string = '#2196f3';
+  @type('string') hat: string = 'none';
+  @type('boolean') sunglasses: boolean = false;
   @type('boolean') isShooting: boolean = false;
   @type('boolean') isDead: boolean = false;
   @type('number') spawnProtection: number = 5;
@@ -82,10 +85,17 @@ export class WeaponPickupSchema extends Schema {
   @type('string') weaponId: string = '';
 }
 
+export class HealthPackSchema extends Schema {
+  @type('string') id: string = '';
+  @type('number') x: number = 0;
+  @type('number') z: number = 0;
+}
+
 export class GameRoomState extends Schema {
   @type({ map: PlayerSchema }) players = new MapSchema<PlayerSchema>();
   @type([ProjectileSchema]) projectiles = new ArraySchema<ProjectileSchema>();
   @type({ map: BotSchema }) bots = new MapSchema<BotSchema>();
   @type({ map: EnergyDrinkSchema }) energyDrinks = new MapSchema<EnergyDrinkSchema>();
   @type({ map: WeaponPickupSchema }) weaponPickups = new MapSchema<WeaponPickupSchema>();
+  @type({ map: HealthPackSchema }) healthPacks = new MapSchema<HealthPackSchema>();
 }

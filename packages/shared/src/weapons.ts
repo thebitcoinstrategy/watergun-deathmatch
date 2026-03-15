@@ -41,7 +41,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     emissiveColor: '#00b8d4', gunBodyColor: '#00838f', gunTankColor: '#00e5ff',
   },
   water_sniper: {
-    id: 'water_sniper', name: 'Water Sniper', damage: 40, fireRate: 0.8, fireMode: 'semi',
+    id: 'water_sniper', name: 'Water Sniper', damage: 100, fireRate: 0.8, fireMode: 'semi',
     speed: 50, gravity: 9.8, pellets: 1, spread: 0, maxAge: 3,
     projectileRadius: 0.06, projectileColor: '#ffffff', trailColor: '#e0e0e0',
     emissiveColor: '#bbdefb', gunBodyColor: '#607d8b', gunTankColor: '#eceff1',

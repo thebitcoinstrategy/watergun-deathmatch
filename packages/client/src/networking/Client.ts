@@ -12,6 +12,9 @@ export interface NetworkPlayer {
   kills: number;
   deaths: number;
   color: string;
+  pantsColor: string;
+  hat: string;
+  sunglasses: boolean;
   isShooting: boolean;
   isDead: boolean;
   spawnProtection: number;
@@ -74,6 +77,7 @@ export class NetworkClient {
   private _projectiles: NetworkProjectile[] = [];
   private _energyDrinks: Map<string, NetworkEnergyDrink> = new Map();
   private _weaponPickups: Map<string, NetworkWeaponPickup> = new Map();
+  private _healthPacks: Map<string, { id: string; x: number; z: number }> = new Map();
 
   onKill: KillCallback | null = null;
   onHit: HitCallback | null = null;
@@ -81,6 +85,7 @@ export class NetworkClient {
   onPlayerLeft: PlayerLeaveCallback | null = null;
   onDrinkPickup: ((playerName: string) => void) | null = null;
   onWeaponPickup: ((playerName: string, weaponName: string) => void) | null = null;
+  onHealthPickup: ((playerName: string) => void) | null = null;
   onVoiceOffer: ((fromId: string, sdp: string) => void) | null = null;
   onVoiceAnswer: ((fromId: string, sdp: string) => void) | null = null;
   onVoiceIce: ((fromId: string, candidate: RTCIceCandidateInit) => void) | null = null;
@@ -93,8 +98,8 @@ export class NetworkClient {
   get connected(): boolean { return this.room !== null; }
   get roomId(): string { return this.room?.roomId ?? ''; }
 
-  async joinOrCreate(roomCode: string, name: string, color?: string, numBots?: number): Promise<string> {
-    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color, numBots });
+  async joinOrCreate(roomCode: string, name: string, color?: string, numBots?: number, mapId?: string, pantsColor?: string, hat?: string, sunglasses?: boolean): Promise<string> {
+    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color, numBots, mapId, pantsColor, hat, sunglasses });
     this._myId = this.room.sessionId;
     this.setupListeners();
     return roomCode;
@@ -110,6 +115,7 @@ export class NetworkClient {
       projectiles: NetworkProjectile[];
       energyDrinks?: Record<string, NetworkEnergyDrink>;
       weaponPickups?: Record<string, NetworkWeaponPickup>;
+      healthPacks?: Record<string, { id: string; x: number; z: number }>;
     }) => {
       // Update players
       this._players.clear();
@@ -141,6 +147,14 @@ export class NetworkClient {
           this._weaponPickups.set(key, pickup);
         }
       }
+
+      // Update health packs
+      if (data.healthPacks) {
+        this._healthPacks.clear();
+        for (const [key, pack] of Object.entries(data.healthPacks)) {
+          this._healthPacks.set(key, pack);
+        }
+      }
     });
 
     // Message handlers
@@ -162,6 +176,10 @@ export class NetworkClient {
 
     this.room.onMessage('weaponPickup', (data: { playerName: string; weaponName: string }) => {
       this.onWeaponPickup?.(data.playerName, data.weaponName);
+    });
+
+    this.room.onMessage('healthPickup', (data: { playerName: string }) => {
+      this.onHealthPickup?.(data.playerName);
     });
 
     this.room.onMessage('playerLeft', (data: { name: string }) => {
@@ -230,6 +248,10 @@ export class NetworkClient {
     return this._weaponPickups;
   }
 
+  getHealthPacks(): Map<string, { id: string; x: number; z: number }> {
+    return this._healthPacks;
+  }
+
   disconnect(): void {
     this.room?.leave();
     this.room = null;
@@ -237,6 +259,7 @@ export class NetworkClient {
     this._bots.clear();
     this._energyDrinks.clear();
     this._weaponPickups.clear();
+    this._healthPacks.clear();
     this._projectiles = [];
   }
 }

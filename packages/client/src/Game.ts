@@ -1,11 +1,11 @@
 import * as THREE from 'three';
-import { PLAYER_SPEED, GRAVITY, PLAYER_JUMP_FORCE, MAP_SIZE, PLAYER_MAX_HEALTH, WATER_DAMAGE } from '@watergun/shared';
+import { PLAYER_SPEED, GRAVITY, PLAYER_JUMP_FORCE, MAP_SIZE, PLAYER_MAX_HEALTH, WATER_DAMAGE, MAPS, DEFAULT_MAP } from '@watergun/shared';
 import { WEAPONS, DEFAULT_WEAPON, PICKUP_WEAPON_IDS, NUM_WEAPON_PICKUPS, WEAPON_PICKUP_RADIUS, WEAPON_RESPAWN_DELAY } from '@watergun/shared';
-import type { WeaponId } from '@watergun/shared';
+import type { WeaponId, MapId } from '@watergun/shared';
 import { SceneManager } from './rendering/SceneManager';
 import { CameraController } from './camera/CameraController';
 import { InputManager } from './input/InputManager';
-import { createBlockyCharacter, animateCharacter } from './rendering/PlayerRenderer';
+import { createBlockyCharacter, animateCharacter, type CharacterOptions } from './rendering/PlayerRenderer';
 import { WaterEffect } from './rendering/WaterEffect';
 import { BotEnemy } from './enemies/BotEnemy';
 import { NetworkClient } from './networking/Client';
@@ -15,12 +15,9 @@ import { VoiceChat } from './networking/VoiceChat';
 const NUM_BOTS = 2;
 const ROUND_TIME = 300; // 5 minutes
 
-const EDGE_SPAWNS = [
-  new THREE.Vector3(-17, 0, -17), new THREE.Vector3(17, 0, -17),
-  new THREE.Vector3(-17, 0, 17), new THREE.Vector3(17, 0, 17),
-];
+// EDGE_SPAWNS will be set from map data in constructor
 
-const SPAWN_PROTECTION_TIME = 5; // seconds of invulnerability after spawn
+const SPAWN_PROTECTION_TIME = 3; // seconds of invulnerability after spawn
 
 const NUM_ENERGY_DRINKS = 3;
 const SPEED_BOOST_DURATION = 5;
@@ -29,7 +26,14 @@ const SPEED_BOOST_MULTIPLIER = 1.6;
 const DRINK_PICKUP_RADIUS = 1.5;
 const DRINK_RESPAWN_DELAY = 8;
 
+const NUM_HEALTH_PACKS = 3;
+const HEALTH_PACK_HEAL = 40;
+const HEALTH_PACK_PICKUP_RADIUS = 1.5;
+const HEALTH_PACK_RESPAWN_DELAY = 10;
+
 export class Game {
+  private mapId: MapId;
+  private edgeSpawns: THREE.Vector3[];
   private sceneManager: SceneManager;
   private cameraController: CameraController;
   private inputManager: InputManager;
@@ -80,6 +84,12 @@ export class Game {
   private offlineWeaponPickupRespawnTimers: number[] = [];
   private offlineWeaponPickupCounter = 0;
 
+  // Health packs
+  private healthPackMeshes: Map<string, THREE.Group> = new Map();
+  private offlineHealthPacks: { id: string; x: number; z: number }[] = [];
+  private offlineHealthPackRespawnTimers: number[] = [];
+  private offlineHealthPackCounter = 0;
+
   private killFeed: { text: string; time: number }[] = [];
   private clock: THREE.Clock;
   private lastShootTime = 0;
@@ -97,8 +107,10 @@ export class Game {
   private showScoreboard = false;
   private roomCode = '';
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.sceneManager = new SceneManager(canvas);
+  constructor(canvas: HTMLCanvasElement, mapId: MapId = DEFAULT_MAP) {
+    this.mapId = mapId;
+    this.edgeSpawns = MAPS[mapId].spawns.map(s => new THREE.Vector3(s.x, 0, s.z));
+    this.sceneManager = new SceneManager(canvas, mapId);
     this.cameraController = new CameraController();
     this.inputManager = new InputManager();
     this.waterEffect = new WaterEffect(this.sceneManager.scene);
@@ -109,7 +121,7 @@ export class Game {
     this.cameraController.addToScene(this.sceneManager.scene);
 
     this.player = createBlockyCharacter('#4fc3f7');
-    const initSpawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
+    const initSpawn = this.edgeSpawns[Math.floor(Math.random() * this.edgeSpawns.length)];
     this.playerPosition = new THREE.Vector3(
       initSpawn.x + (Math.random() - 0.5) * 3,
       0,
@@ -142,18 +154,30 @@ export class Game {
     });
   }
 
-  private setPlayerColor(color: string): void {
+  private setPlayerAppearance(opts: string | CharacterOptions): void {
     this.sceneManager.scene.remove(this.player);
-    this.player = createBlockyCharacter(color);
+    this.player = createBlockyCharacter(opts);
     this.player.position.copy(this.playerPosition);
     this.setPlayerMirrorOnly();
     this.sceneManager.scene.add(this.player);
   }
 
-  startOffline(name: string, color?: string): void {
+  /** @deprecated Use setPlayerAppearance instead */
+  private setPlayerColor(color: string): void {
+    this.setPlayerAppearance(color);
+  }
+
+  startOffline(name: string, color?: string, pantsColor?: string, hat?: string, sunglasses?: boolean): void {
     this.playerName = name;
     this.isOnline = false;
-    if (color) this.setPlayerColor(color);
+    if (color) {
+      this.setPlayerAppearance({
+        shirtColor: color,
+        pantsColor: pantsColor || '#2196f3',
+        hat: (hat || 'none') as CharacterOptions['hat'],
+        sunglasses: sunglasses || false,
+      });
+    }
 
     for (let i = 0; i < NUM_BOTS; i++) {
       this.bots.push(new BotEnemy(this.sceneManager.scene, this.waterEffect, i, this.sceneManager));
@@ -162,6 +186,11 @@ export class Game {
     // Spawn energy drinks
     for (let i = 0; i < NUM_ENERGY_DRINKS; i++) {
       this.spawnOfflineDrink();
+    }
+
+    // Spawn health packs
+    for (let i = 0; i < NUM_HEALTH_PACKS; i++) {
+      this.spawnOfflineHealthPack();
     }
 
     // Spawn weapon pickups
@@ -209,6 +238,10 @@ export class Game {
       this.addKillFeedEntry(`${playerName} picked up ${weaponName}!`);
     };
 
+    networkClient.onHealthPickup = (playerName) => {
+      this.addKillFeedEntry(`${playerName} picked up health!`);
+    };
+
     // Voice chat
     this.voiceChat = new VoiceChat(networkClient.myId, (type, data) => networkClient.sendVoiceSignal(type, data));
     networkClient.onVoiceOffer = (fromId, sdp) => this.voiceChat?.handleSignal(fromId, { type: 'offer', sdp });
@@ -220,6 +253,7 @@ export class Game {
 
   private beginGame(): void {
     this.soundManager.init();
+    this.soundManager.startMusic(this.mapId);
     this.inputManager.requestPointerLock();
     document.getElementById('hud')!.style.display = 'block';
 
@@ -403,6 +437,7 @@ export class Game {
     this.checkProjectileHitsOffline();
     this.updateBots(dt, elapsed);
     this.updateEnergyDrinksOffline(dt);
+    this.updateHealthPacksOffline(dt);
     this.updateWeaponPickupsOffline(dt);
     this.sceneManager.updateWater(elapsed);
     this.cameraController.update(this.playerPosition, this.isCrouching);
@@ -433,6 +468,7 @@ export class Game {
 
       if (proj.ownerId !== 'player' && !this.isDead) {
         if (playerBox.containsPoint(proj.position)) {
+          this.waterEffect.createHitSplash(proj.position);
           this.waterEffect.removeProjectileAt(i);
           this.takeDamage(WATER_DAMAGE, proj.ownerId);
           continue;
@@ -446,6 +482,7 @@ export class Game {
         if (proj.ownerId === bot.name) continue; // Don't hit self
         const botBox = bot.getHitBox();
         if (botBox.containsPoint(proj.position)) {
+          this.waterEffect.createHitSplash(proj.position);
           this.waterEffect.removeProjectileAt(i);
           const dmg = proj.ownerId === 'player' ? WEAPONS[this.currentWeapon].damage : WATER_DAMAGE;
           const killed = bot.takeDamage(dmg);
@@ -518,6 +555,7 @@ export class Game {
         );
         if (box.containsPoint(proj.position)) {
           hit = true;
+          this.waterEffect.createHitSplash(proj.position);
           this.networkClient!.reportHit(player.id);
           this.hitMarkerTimer = 0.15;
           this.soundManager.playSplash();
@@ -535,6 +573,7 @@ export class Game {
           );
           if (box.containsPoint(proj.position)) {
             hit = true;
+            this.waterEffect.createHitSplash(proj.position);
             this.networkClient!.reportHit(bot.id);
             this.hitMarkerTimer = 0.15;
             this.soundManager.playSplash();
@@ -556,6 +595,11 @@ export class Game {
     // Sync health/kills/deaths/death-state from server if available
     const myPlayer = this.networkClient.getMyPlayer();
     if (myPlayer) {
+      // Detect damage for sound effect
+      if (myPlayer.health < this.playerHealth && !myPlayer.isDead) {
+        this.soundManager.playHurt(myPlayer.health);
+        this.damageFlashTimer = 0.2;
+      }
       this.playerHealth = myPlayer.health;
       this.playerKills = myPlayer.kills;
       this.playerDeaths = myPlayer.deaths;
@@ -624,6 +668,9 @@ export class Game {
     // Weapon pickups
     this.updateWeaponPickupsOnline();
 
+    // Health packs
+    this.updateHealthPacksOnline();
+
     // Send input to server so other players see us
     const move = this.inputManager.getMovementVector();
     const yaw = this.cameraController.getYaw();
@@ -690,11 +737,17 @@ export class Game {
 
       let model = this.remotePlayers.get(id);
       if (!model) {
-        model = createBlockyCharacter(player.color);
+        model = createBlockyCharacter({
+          shirtColor: player.color,
+          pantsColor: player.pantsColor || '#2196f3',
+          hat: (player.hat || 'none') as CharacterOptions['hat'],
+          sunglasses: player.sunglasses || false,
+        });
         const nameSprite = this.createNameSprite(player.name);
         nameSprite.position.y = 2.5;
         model.add(nameSprite);
         this.remotePlayerNames.set(id, nameSprite);
+        this.addHealthBar(model);
         this.sceneManager.scene.add(model);
         this.remotePlayers.set(id, model);
       }
@@ -710,6 +763,9 @@ export class Game {
 
       model.position.set(player.x, player.y, player.z);
       model.rotation.y = player.rotY + Math.PI;
+
+      // Update health bar
+      this.updateHealthBar(model, player.health, this.cameraController.getCamera().position);
 
       // Shoot recoil timer
       if (player.isShooting) {
@@ -745,6 +801,7 @@ export class Game {
         nameSprite.position.y = 2.5;
         model.add(nameSprite);
         this.networkBotNames.set(id, nameSprite);
+        this.addHealthBar(model);
         this.sceneManager.scene.add(model);
         this.networkBotModels.set(id, model);
       }
@@ -759,6 +816,10 @@ export class Game {
 
       model.position.set(bot.x, bot.y, bot.z);
       model.rotation.y = bot.rotY + Math.PI;
+
+      // Update health bar
+      this.updateHealthBar(model, bot.health, this.cameraController.getCamera().position);
+
       animateCharacter(model, performance.now() / 1000, isMoving, 0, 0);
     });
   }
@@ -992,7 +1053,7 @@ export class Game {
     if (this.spawnProtection > 0) return; // invulnerable during spawn protection
     this.playerHealth -= amount;
     this.damageFlashTimer = 0.2;
-    this.soundManager.playHurt();
+    this.soundManager.playHurt(this.playerHealth);
 
     if (this.playerHealth <= 0) {
       this.playerHealth = 0;
@@ -1019,7 +1080,7 @@ export class Game {
     this.currentWeapon = DEFAULT_WEAPON;
     this.cameraController.setViewmodelWeapon(DEFAULT_WEAPON);
     this.fireInterval = 1 / WEAPONS[DEFAULT_WEAPON].fireRate;
-    const spawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
+    const spawn = this.edgeSpawns[Math.floor(Math.random() * this.edgeSpawns.length)];
     this.playerPosition.set(
       spawn.x + (Math.random() - 0.5) * 3,
       0,
@@ -1273,6 +1334,150 @@ export class Game {
     });
   }
 
+  // === HEALTH PACKS ===
+  private createHealthPackMesh(): THREE.Group {
+    const group = new THREE.Group();
+    // Red cross box
+    const boxGeo = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+    const boxMat = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.3, roughness: 0.4 });
+    const box = new THREE.Mesh(boxGeo, boxMat);
+    box.position.y = 0.5;
+    group.add(box);
+    // Red cross horizontal
+    const crossH = new THREE.Mesh(
+      new THREE.BoxGeometry(0.3, 0.06, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0xf44336 })
+    );
+    crossH.position.set(0, 0.5, 0.21);
+    group.add(crossH);
+    // Red cross vertical
+    const crossV = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.3, 0.06),
+      new THREE.MeshStandardMaterial({ color: 0xf44336 })
+    );
+    crossV.position.set(0, 0.5, 0.21);
+    group.add(crossV);
+    // Glow ring
+    const glowGeo = new THREE.RingGeometry(0.3, 0.6, 16);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xf44336, transparent: true, opacity: 0.3, side: THREE.DoubleSide });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.02;
+    group.add(glow);
+    return group;
+  }
+
+  private spawnOfflineHealthPack(): void {
+    const half = MAP_SIZE / 2 - 3;
+    const id = `hp_${++this.offlineHealthPackCounter}`;
+    const x = (Math.random() - 0.5) * half * 2;
+    const z = (Math.random() - 0.5) * half * 2;
+    this.offlineHealthPacks.push({ id, x, z });
+    const mesh = this.createHealthPackMesh();
+    mesh.position.set(x, 0, z);
+    this.sceneManager.scene.add(mesh);
+    this.healthPackMeshes.set(id, mesh);
+  }
+
+  private updateHealthPacksOffline(dt: number): void {
+    // Respawn timers
+    for (let i = this.offlineHealthPackRespawnTimers.length - 1; i >= 0; i--) {
+      this.offlineHealthPackRespawnTimers[i] -= dt;
+      if (this.offlineHealthPackRespawnTimers[i] <= 0) {
+        this.offlineHealthPackRespawnTimers.splice(i, 1);
+        this.spawnOfflineHealthPack();
+      }
+    }
+
+    // Check pickup
+    if (this.playerHealth < PLAYER_MAX_HEALTH) {
+      for (let i = this.offlineHealthPacks.length - 1; i >= 0; i--) {
+        const pack = this.offlineHealthPacks[i];
+        const dx = this.playerPosition.x - pack.x;
+        const dz = this.playerPosition.z - pack.z;
+        if (Math.sqrt(dx * dx + dz * dz) < HEALTH_PACK_PICKUP_RADIUS) {
+          this.playerHealth = Math.min(PLAYER_MAX_HEALTH, this.playerHealth + HEALTH_PACK_HEAL);
+          const mesh = this.healthPackMeshes.get(pack.id);
+          if (mesh) {
+            this.sceneManager.scene.remove(mesh);
+            this.healthPackMeshes.delete(pack.id);
+          }
+          this.offlineHealthPacks.splice(i, 1);
+          this.offlineHealthPackRespawnTimers.push(HEALTH_PACK_RESPAWN_DELAY);
+          this.addKillFeedEntry('Health restored!');
+          break;
+        }
+      }
+    }
+
+    // Animate
+    const t = performance.now() / 1000;
+    this.healthPackMeshes.forEach((mesh) => {
+      mesh.children[0].position.y = 0.5 + Math.sin(t * 2.5) * 0.1;
+      mesh.children[0].rotation.y = t * 1.5;
+    });
+  }
+
+  private updateHealthPacksOnline(): void {
+    if (!this.networkClient) return;
+    const serverPacks = this.networkClient.getHealthPacks();
+
+    this.healthPackMeshes.forEach((mesh, id) => {
+      if (!serverPacks.has(id)) {
+        this.sceneManager.scene.remove(mesh);
+        this.healthPackMeshes.delete(id);
+      }
+    });
+
+    serverPacks.forEach((pack, id) => {
+      if (!this.healthPackMeshes.has(id)) {
+        const mesh = this.createHealthPackMesh();
+        mesh.position.set(pack.x, 0, pack.z);
+        this.sceneManager.scene.add(mesh);
+        this.healthPackMeshes.set(id, mesh);
+      }
+    });
+
+    const t = performance.now() / 1000;
+    this.healthPackMeshes.forEach((mesh) => {
+      mesh.children[0].position.y = 0.5 + Math.sin(t * 2.5) * 0.1;
+      mesh.children[0].rotation.y = t * 1.5;
+    });
+  }
+
+  private addHealthBar(model: THREE.Group): void {
+    const bgGeo = new THREE.PlaneGeometry(1, 0.08);
+    const bg = new THREE.Mesh(bgGeo, new THREE.MeshBasicMaterial({ color: '#333333', transparent: true, opacity: 0.7, side: THREE.DoubleSide }));
+    bg.position.y = 2.7;
+    model.add(bg);
+
+    const fillGeo = new THREE.PlaneGeometry(1, 0.08);
+    const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ color: '#4fc3f7', side: THREE.DoubleSide }));
+    fill.position.y = 2.7;
+    model.add(fill);
+
+    model.userData.healthBarBg = bg;
+    model.userData.healthBarFill = fill;
+  }
+
+  private updateHealthBar(model: THREE.Group, health: number, cameraPos: THREE.Vector3): void {
+    const bg = model.userData.healthBarBg as THREE.Mesh | undefined;
+    const fill = model.userData.healthBarFill as THREE.Mesh | undefined;
+    if (!bg || !fill) return;
+
+    const pct = Math.max(0, health / PLAYER_MAX_HEALTH);
+    fill.scale.x = pct;
+    fill.position.x = -(1 - pct) * 0.5;
+    const mat = fill.material as THREE.MeshBasicMaterial;
+    if (pct > 0.5) mat.color.set('#4fc3f7');
+    else if (pct > 0.25) mat.color.set('#ff9800');
+    else mat.color.set('#f44336');
+
+    // Billboard: face camera
+    bg.lookAt(cameraPos.x, model.position.y + 2.7, cameraPos.z);
+    fill.lookAt(cameraPos.x, model.position.y + 2.7, cameraPos.z);
+  }
+
   private createNameSprite(name: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -1414,11 +1619,14 @@ export class Game {
     document.getElementById('pool-indicator')!.style.display = this.isInPool ? 'block' : 'none';
     document.getElementById('slide-indicator')!.style.display = this.isOnSlide ? 'block' : 'none';
 
-    // Weapon name
+    // Weapon name + sniper scope
     const weaponNameEl = document.getElementById('weapon-name');
     if (weaponNameEl) {
       weaponNameEl.textContent = WEAPONS[this.currentWeapon].name;
     }
+    const isSniper = this.currentWeapon === 'water_sniper';
+    document.getElementById('sniper-scope')!.style.display = isSniper ? 'block' : 'none';
+    document.getElementById('crosshair')!.style.display = isSniper ? 'none' : 'block';
 
     // Player list
     const playerListEl = document.getElementById('player-list')!;

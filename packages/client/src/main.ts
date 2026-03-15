@@ -3,7 +3,6 @@ import { setupLobby } from './ui/LobbyScreen';
 import { NetworkClient } from './networking/Client';
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
-const game = new Game(canvas);
 
 // Auto-detect server URL: in production (same origin), use page host; in dev, use port 2567
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -16,15 +15,18 @@ async function main() {
   const result = await setupLobby();
   const statusEl = document.getElementById('connection-status')!;
 
+  // Create game with selected map
+  const game = new Game(canvas, result.mapId);
+
   if (result.mode === 'offline') {
-    game.startOffline(result.name, result.color);
+    game.startOffline(result.name, result.color, result.pantsColor, result.hat, result.sunglasses);
   } else {
     statusEl.style.display = 'block';
     statusEl.textContent = `Joining room ${result.roomCode}...`;
 
     try {
       const client = new NetworkClient(SERVER_URL);
-      await client.joinOrCreate(result.roomCode, result.name, result.color, result.numBots);
+      await client.joinOrCreate(result.roomCode, result.name, result.color, result.numBots, result.mapId, result.pantsColor, result.hat, result.sunglasses);
       statusEl.textContent = `Connected to room ${result.roomCode}!`;
 
       setTimeout(() => { statusEl.style.display = 'none'; }, 2000);

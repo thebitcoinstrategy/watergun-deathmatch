@@ -14,6 +14,20 @@
     <div class="ch-left"></div>
     <div class="ch-right"></div>
   </div>
+  <div id="sniper-scope" style="display:none;">
+    <div class="scope-circle">
+      <div class="scope-crosshair-h"></div>
+      <div class="scope-crosshair-v"></div>
+      <div class="scope-center"></div>
+      <div class="scope-range scope-range-1"></div>
+      <div class="scope-range scope-range-2"></div>
+      <div class="scope-range scope-range-3"></div>
+    </div>
+    <div class="scope-overlay-top"></div>
+    <div class="scope-overlay-bottom"></div>
+    <div class="scope-overlay-left"></div>
+    <div class="scope-overlay-right"></div>
+  </div>
 
   <div id="hud">
     <div id="hit-marker" style="display:none;">X</div>
@@ -25,7 +39,7 @@
     <div id="round-timer">5:00</div>
     <div id="camera-mode" style="display:none;"></div>
     <div id="mute-indicator"></div>
-    <div id="controls-hint">WASD: Move | Space: Jump | Click: Shoot | M: Mute | TAB: Scoreboard</div>
+    <div id="controls-hint">WASD: Move | Space: Jump | Shift: Crouch | Click: Shoot | M: Mute | TAB: Scoreboard</div>
     <div id="player-list"></div>
     <div id="kill-feed"></div>
     <div id="damage-overlay"></div>
@@ -62,52 +76,126 @@
   </div>
 
   <div id="lobby-screen">
-    <div class="lobby-card">
+    <div class="lobby-card lobby-card-wide">
       <h1>AquaStrike</h1>
       <div id="build-version"></div>
 
       <!-- Full lobby (normal entry) -->
       <div id="full-lobby">
-        <div class="lobby-field">
-          <label for="player-name">Your Name</label>
-          <input type="text" id="player-name" placeholder="Enter your name" maxlength="15" value="" />
-        </div>
+        <div class="lobby-columns">
+          <!-- Left: Character customization -->
+          <div class="lobby-col-left">
+            <div class="lobby-field">
+              <label for="player-name">Your Name</label>
+              <input type="text" id="player-name" placeholder="Enter your name" maxlength="15" value="" />
+            </div>
 
-        <div class="lobby-field">
-          <label>Outfit Color</label>
-          <div id="color-picker" class="color-picker">
-            <div class="color-swatch selected" data-color="#4fc3f7" style="background:#4fc3f7;" title="Blue"></div>
-            <div class="color-swatch" data-color="#f44336" style="background:#f44336;" title="Red"></div>
-            <div class="color-swatch" data-color="#e91e63" style="background:#e91e63;" title="Pink"></div>
-            <div class="color-swatch" data-color="#9c27b0" style="background:#9c27b0;" title="Purple"></div>
-            <div class="color-swatch" data-color="#ff9800" style="background:#ff9800;" title="Orange"></div>
-            <div class="color-swatch" data-color="#ffeb3b" style="background:#ffeb3b;" title="Yellow"></div>
-            <div class="color-swatch" data-color="#8bc34a" style="background:#8bc34a;" title="Green"></div>
-            <div class="color-swatch" data-color="#00bcd4" style="background:#00bcd4;" title="Teal"></div>
+            <div class="lobby-field">
+              <label>Shirt Color</label>
+              <div id="color-picker" class="color-picker">
+                <div class="color-swatch selected" data-color="#4fc3f7" style="background:#4fc3f7;" title="Blue"></div>
+                <div class="color-swatch" data-color="#f44336" style="background:#f44336;" title="Red"></div>
+                <div class="color-swatch" data-color="#e91e63" style="background:#e91e63;" title="Pink"></div>
+                <div class="color-swatch" data-color="#9c27b0" style="background:#9c27b0;" title="Purple"></div>
+                <div class="color-swatch" data-color="#ff9800" style="background:#ff9800;" title="Orange"></div>
+                <div class="color-swatch" data-color="#ffeb3b" style="background:#ffeb3b;" title="Yellow"></div>
+                <div class="color-swatch" data-color="#8bc34a" style="background:#8bc34a;" title="Green"></div>
+                <div class="color-swatch" data-color="#00bcd4" style="background:#00bcd4;" title="Teal"></div>
+              </div>
+            </div>
+
+            <div class="lobby-field">
+              <label>Pants Color</label>
+              <div id="pants-picker" class="color-picker">
+                <div class="color-swatch selected" data-color="#2196f3" style="background:#2196f3;" title="Blue"></div>
+                <div class="color-swatch" data-color="#1a237e" style="background:#1a237e;" title="Navy"></div>
+                <div class="color-swatch" data-color="#424242" style="background:#424242;" title="Dark Gray"></div>
+                <div class="color-swatch" data-color="#3e2723" style="background:#3e2723;" title="Brown"></div>
+                <div class="color-swatch" data-color="#b71c1c" style="background:#b71c1c;" title="Crimson"></div>
+                <div class="color-swatch" data-color="#f5f5f5" style="background:#f5f5f5;" title="White"></div>
+                <div class="color-swatch" data-color="#1b5e20" style="background:#1b5e20;" title="Forest"></div>
+                <div class="color-swatch" data-color="#4a148c" style="background:#4a148c;" title="Violet"></div>
+              </div>
+            </div>
+
+            <div class="lobby-field">
+              <label>Hat</label>
+              <div id="hat-picker" class="hat-picker">
+                <div class="hat-option selected" data-hat="none">None</div>
+                <div class="hat-option" data-hat="cap">Cap</div>
+                <div class="hat-option" data-hat="cowboy">Cowboy</div>
+                <div class="hat-option" data-hat="tophat">Top Hat</div>
+                <div class="hat-option" data-hat="headband">Headband</div>
+              </div>
+            </div>
+
+            <div class="lobby-field">
+              <label class="checkbox-label">
+                <input type="checkbox" id="sunglasses-toggle" />
+                Sunglasses
+              </label>
+            </div>
           </div>
-        </div>
 
-        <div class="lobby-buttons">
-          <button id="btn-offline" class="lobby-btn btn-offline">Play Solo (vs Bots)</button>
+          <!-- Center: 3D Preview + Play controls -->
+          <div class="lobby-col-center">
+            <canvas id="preview-canvas" width="200" height="280"></canvas>
 
-          <div class="lobby-divider"><span>OR PLAY ONLINE</span></div>
-
-          <div class="lobby-field" style="margin-bottom:12px;">
-            <label for="room-code">Room Number</label>
-            <input type="text" id="room-code" placeholder="1" maxlength="10" value="1" />
+            <div class="lobby-play-section">
+              <div class="lobby-field" style="margin-bottom:8px;">
+                <label for="room-code">Room</label>
+                <input type="text" id="room-code" placeholder="1" maxlength="10" value="1" />
+              </div>
+              <div class="lobby-field" style="margin-bottom:10px;">
+                <label for="bot-count">Bots</label>
+                <select id="bot-count">
+                  <option value="0">0 — None</option>
+                  <option value="1" selected>1 Bot</option>
+                  <option value="2">2 Bots</option>
+                  <option value="3">3 Bots</option>
+                  <option value="4">4 Bots</option>
+                  <option value="5">5 Bots</option>
+                </select>
+              </div>
+              <div class="lobby-btn-row">
+                <button id="btn-offline" class="lobby-btn btn-offline">Solo</button>
+                <button id="btn-online" class="lobby-btn btn-create">Multiplayer</button>
+              </div>
+            </div>
           </div>
-          <div class="lobby-field" style="margin-bottom:12px;">
-            <label for="bot-count">Bots in Room</label>
-            <select id="bot-count">
-              <option value="0">0 — No Bots</option>
-              <option value="1" selected>1 Bot</option>
-              <option value="2">2 Bots</option>
-              <option value="3">3 Bots</option>
-              <option value="4">4 Bots</option>
-              <option value="5">5 Bots</option>
-            </select>
+
+          <!-- Right: Map selection -->
+          <div class="lobby-col-right">
+            <div class="lobby-field">
+              <label>Select Map</label>
+              <div id="map-grid" class="map-grid">
+                <div class="map-card selected" data-map="aqua_park">
+                  <div class="map-card-icon map-icon-aqua"></div>
+                  <span>Aqua Park</span>
+                </div>
+                <div class="map-card" data-map="pirate_cove">
+                  <div class="map-card-icon map-icon-pirate"></div>
+                  <span>Pirate Cove</span>
+                </div>
+                <div class="map-card" data-map="neon_city">
+                  <div class="map-card-icon map-icon-neon"></div>
+                  <span>Neon City</span>
+                </div>
+                <div class="map-card" data-map="sky_fortress">
+                  <div class="map-card-icon map-icon-sky"></div>
+                  <span>Sky Fortress</span>
+                </div>
+                <div class="map-card" data-map="jungle_temple">
+                  <div class="map-card-icon map-icon-jungle"></div>
+                  <span>Jungle Temple</span>
+                </div>
+                <div class="map-card" data-map="mega_arena">
+                  <div class="map-card-icon map-icon-mega"></div>
+                  <span>Mega Arena</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <button id="btn-online" class="lobby-btn btn-create">Play Online</button>
         </div>
       </div>
 
@@ -121,7 +209,7 @@
         </div>
 
         <div class="lobby-field">
-          <label>Outfit Color</label>
+          <label>Shirt Color</label>
           <div id="color-picker-join" class="color-picker">
             <div class="color-swatch selected" data-color="#4fc3f7" style="background:#4fc3f7;" title="Blue"></div>
             <div class="color-swatch" data-color="#f44336" style="background:#f44336;" title="Red"></div>

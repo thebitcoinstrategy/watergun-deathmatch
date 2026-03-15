@@ -335,7 +335,7 @@ export class InputManager {
   }
 
   isCrouching(): boolean {
-    return this.keys.has('KeyC') || this.keys.has('ControlLeft') || this.keys.has('ControlRight') || this.touchCrouchBtn;
+    return this.keys.has('KeyC') || this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') || this.touchCrouchBtn;
   }
 
   isTabHeld(): boolean {
