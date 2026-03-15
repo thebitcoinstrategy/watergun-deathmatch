@@ -185,15 +185,18 @@ export class InputManager {
       e.preventDefault();
       e.stopPropagation();
       this.touchShootClicked = true;
+      this.touchShootBtn = true;
       fireBtn.classList.add('active');
     }, { passive: false });
     fireBtn.addEventListener('touchend', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      this.touchShootBtn = false;
       fireBtn.classList.remove('active');
     }, { passive: false });
     fireBtn.addEventListener('touchcancel', (e) => {
       e.preventDefault();
+      this.touchShootBtn = false;
       fireBtn.classList.remove('active');
     }, { passive: false });
 
@@ -279,6 +282,13 @@ export class InputManager {
       return true;
     }
     return false;
+  }
+
+  isShootingHeld(): boolean {
+    if (this.isTouchDevice) {
+      return this.touchShootBtn;
+    }
+    return this.mouseDown;
   }
 
   isJumping(): boolean {

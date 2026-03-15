@@ -72,6 +72,10 @@ export class CameraController {
     this.viewmodelGun.update(dt, isMoving, isShooting);
   }
 
+  setViewmodelColors(bodyColor: string, tankColor: string): void {
+    this.viewmodelGun.setColors(bodyColor, tankColor);
+  }
+
   getYaw(): number {
     return this.mode === 'first-person'
       ? this.firstPerson.getYaw()

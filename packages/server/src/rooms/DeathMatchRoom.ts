@@ -1,5 +1,7 @@
 import { Room, Client } from 'colyseus';
-import { GameRoomState, PlayerSchema, ProjectileSchema, BotSchema, EnergyDrinkSchema } from '../schemas/GameState';
+import { GameRoomState, PlayerSchema, ProjectileSchema, BotSchema, EnergyDrinkSchema, WeaponPickupSchema } from '../schemas/GameState';
+import { WEAPONS, PICKUP_WEAPON_IDS, NUM_WEAPON_PICKUPS, WEAPON_PICKUP_RADIUS, WEAPON_RESPAWN_DELAY } from '@watergun/shared';
+import type { WeaponId } from '@watergun/shared';
 
 const MAP_SIZE = 40;
 const PLAYER_SPEED = 8;
@@ -96,6 +98,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   private playerInputs: Map<string, PlayerInput> = new Map();
   private drinkCounter = 0;
   private drinkRespawnTimers: number[] = [];
+  private weaponPickupCounter = 0;
+  private weaponRespawnTimers: number[] = [];
 
   onCreate(options: { roomCode?: string }) {
     this.setState(new GameRoomState());
@@ -122,6 +126,11 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     // Spawn energy drinks
     for (let i = 0; i < NUM_ENERGY_DRINKS; i++) {
       this.spawnEnergyDrink();
+    }
+
+    // Spawn weapon pickups
+    for (let i = 0; i < NUM_WEAPON_PICKUPS; i++) {
+      this.spawnWeaponPickup();
     }
 
     // Handle player input
@@ -165,23 +174,35 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       // Can't deal damage during spawn protection
       if (attacker.spawnProtection > 0) return;
 
-      // Rate limit: max 1 hit per 150ms per attacker
+      // Look up weapon stats
+      const weaponDef = WEAPONS[(attacker.weapon || 'water_pistol') as WeaponId] || WEAPONS.water_pistol;
+
+      // Rate limit based on weapon fire rate
       const now = Date.now();
-      if (now - attacker.lastShootTime < 150) return;
-      attacker.lastShootTime = now;
+      const minInterval = Math.max(80, (1000 / weaponDef.fireRate) * 0.7);
+      // For multi-pellet weapons, allow burst of hits within a short window
+      const hitWindow = weaponDef.pellets > 1 ? 50 : minInterval;
+      if (now - attacker.lastShootTime < hitWindow) return;
+      if (weaponDef.pellets <= 1) attacker.lastShootTime = now;
+      // For multi-pellet, only update timestamp after burst window
+      if (weaponDef.pellets > 1 && now - attacker.lastShootTime >= minInterval) {
+        attacker.lastShootTime = now;
+      }
+
+      const damage = weaponDef.damage;
 
       // Try to damage a player (skip if victim has spawn protection)
       const victimPlayer = this.state.players.get(data.victimId);
       if (victimPlayer && !victimPlayer.isDead && victimPlayer.id !== client.sessionId) {
         if (victimPlayer.spawnProtection > 0) return; // victim is protected
-        this.damagePlayer(victimPlayer, client.sessionId);
+        this.damagePlayer(victimPlayer, client.sessionId, damage);
         return;
       }
 
       // Try to damage a bot
       const victimBot = this.state.bots.get(data.victimId);
       if (victimBot && !victimBot.isDead) {
-        this.damageBot(victimBot, client.sessionId);
+        this.damageBot(victimBot, client.sessionId, damage);
       }
     });
 
@@ -295,6 +316,19 @@ export class DeathMatchRoom extends Room<GameRoomState> {
           }
         });
       }
+
+      // Check weapon pickup
+      this.state.weaponPickups.forEach((pickup, pickupId) => {
+        const dx = player.x - pickup.x;
+        const dz = player.z - pickup.z;
+        if (Math.sqrt(dx * dx + dz * dz) < WEAPON_PICKUP_RADIUS) {
+          const weaponDef = WEAPONS[pickup.weaponId as WeaponId];
+          player.weapon = pickup.weaponId;
+          this.state.weaponPickups.delete(pickupId);
+          this.weaponRespawnTimers.push(WEAPON_RESPAWN_DELAY);
+          this.broadcast('weaponPickup', { playerName: player.name, weaponName: weaponDef?.name || pickup.weaponId });
+        }
+      });
     });
 
     // Energy drink respawn timers
@@ -303,6 +337,15 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (this.drinkRespawnTimers[i] <= 0) {
         this.drinkRespawnTimers.splice(i, 1);
         this.spawnEnergyDrink();
+      }
+    }
+
+    // Weapon pickup respawn timers
+    for (let i = this.weaponRespawnTimers.length - 1; i >= 0; i--) {
+      this.weaponRespawnTimers[i] -= dt;
+      if (this.weaponRespawnTimers[i] <= 0) {
+        this.weaponRespawnTimers.splice(i, 1);
+        this.spawnWeaponPickup();
       }
     }
 
@@ -376,6 +419,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         isShooting: p.isShooting, isDead: p.isDead,
         spawnProtection: p.spawnProtection,
         speedBoostTimer: p.speedBoostTimer,
+        weapon: p.weapon,
       };
     });
 
@@ -403,7 +447,12 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       drinksData[id] = { id: d.id, x: d.x, z: d.z };
     });
 
-    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData, energyDrinks: drinksData });
+    const weaponPickupsData: Record<string, any> = {};
+    this.state.weaponPickups.forEach((wp, id) => {
+      weaponPickupsData[id] = { id: wp.id, x: wp.x, z: wp.z, weaponId: wp.weaponId };
+    });
+
+    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData, energyDrinks: drinksData, weaponPickups: weaponPickupsData });
   }
 
   private updateBot(bot: BotSchema, dt: number) {
@@ -656,8 +705,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     return { player: closestPlayer, dist: closestDist };
   }
 
-  private damagePlayer(player: PlayerSchema, attackerId: string) {
-    player.health -= WATER_DAMAGE;
+  private damagePlayer(player: PlayerSchema, attackerId: string, damage: number = WATER_DAMAGE) {
+    player.health -= damage;
     this.broadcast('hit', { attackerId, victimId: player.id });
     if (player.health <= 0) {
       player.health = 0;
@@ -674,8 +723,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     }
   }
 
-  private damageBot(bot: BotSchema, attackerId: string) {
-    bot.health -= WATER_DAMAGE;
+  private damageBot(bot: BotSchema, attackerId: string, damage: number = WATER_DAMAGE) {
+    bot.health -= damage;
     this.broadcast('hit', { attackerId, victimId: bot.id });
     if (bot.health <= 0) {
       bot.health = 0;
@@ -694,6 +743,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     player.isDead = false;
     player.health = MAX_HEALTH;
     player.spawnProtection = SPAWN_PROTECTION_TIME;
+    player.weapon = 'water_pistol';
     const spawn = this.getEdgeSpawn();
     player.x = spawn.x;
     player.z = spawn.z;
@@ -716,5 +766,15 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     drink.x = (Math.random() - 0.5) * half * 2;
     drink.z = (Math.random() - 0.5) * half * 2;
     this.state.energyDrinks.set(drink.id, drink);
+  }
+
+  private spawnWeaponPickup(): void {
+    const half = MAP_SIZE / 2 - 3;
+    const pickup = new WeaponPickupSchema();
+    pickup.id = `wpn_${++this.weaponPickupCounter}`;
+    pickup.weaponId = PICKUP_WEAPON_IDS[Math.floor(Math.random() * PICKUP_WEAPON_IDS.length)];
+    pickup.x = (Math.random() - 0.5) * half * 2;
+    pickup.z = (Math.random() - 0.5) * half * 2;
+    this.state.weaponPickups.set(pickup.id, pickup);
   }
 }

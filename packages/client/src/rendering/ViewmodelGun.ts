@@ -9,6 +9,8 @@ export class ViewmodelGun {
   private bobTime = 0;
   private recoilAmount = 0;
   private basePosition: THREE.Vector3;
+  private gunBody: THREE.Mesh;
+  private tank: THREE.Mesh;
 
   constructor() {
     this.group = new THREE.Group();
@@ -34,9 +36,9 @@ export class ViewmodelGun {
 
     // Gun body (main barrel)
     const gunBodyMat = new THREE.MeshStandardMaterial({ color: '#ff6f00' });
-    const gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.4), gunBodyMat);
-    gunBody.position.set(0, 0, -0.12);
-    this.group.add(gunBody);
+    this.gunBody = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.4), gunBodyMat);
+    this.gunBody.position.set(0, 0, -0.12);
+    this.group.add(this.gunBody);
 
     // Gun handle
     const handleMat = new THREE.MeshStandardMaterial({ color: '#e65100' });
@@ -51,9 +53,9 @@ export class ViewmodelGun {
       transparent: true,
       opacity: 0.75,
     });
-    const tank = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.14), tankMat);
-    tank.position.set(0, 0.09, -0.04);
-    this.group.add(tank);
+    this.tank = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.14), tankMat);
+    this.tank.position.set(0, 0.09, -0.04);
+    this.group.add(this.tank);
 
     // Pump on top
     const pumpMat = new THREE.MeshStandardMaterial({ color: '#ff8f00' });
@@ -86,6 +88,11 @@ export class ViewmodelGun {
         (child.material as THREE.Material).depthTest = false;
       }
     });
+  }
+
+  setColors(bodyColor: string, tankColor: string): void {
+    (this.gunBody.material as THREE.MeshStandardMaterial).color.set(bodyColor);
+    (this.tank.material as THREE.MeshStandardMaterial).color.set(tankColor);
   }
 
   update(dt: number, isMoving: boolean, isShooting: boolean): void {

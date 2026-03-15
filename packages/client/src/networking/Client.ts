@@ -16,12 +16,20 @@ export interface NetworkPlayer {
   isDead: boolean;
   spawnProtection: number;
   speedBoostTimer: number;
+  weapon: string;
 }
 
 export interface NetworkEnergyDrink {
   id: string;
   x: number;
   z: number;
+}
+
+export interface NetworkWeaponPickup {
+  id: string;
+  x: number;
+  z: number;
+  weaponId: string;
 }
 
 export interface NetworkBot {
@@ -64,12 +72,14 @@ export class NetworkClient {
   private _bots: Map<string, NetworkBot> = new Map();
   private _projectiles: NetworkProjectile[] = [];
   private _energyDrinks: Map<string, NetworkEnergyDrink> = new Map();
+  private _weaponPickups: Map<string, NetworkWeaponPickup> = new Map();
 
   onKill: KillCallback | null = null;
   onHit: HitCallback | null = null;
   onPlayerJoined: PlayerJoinCallback | null = null;
   onPlayerLeft: PlayerLeaveCallback | null = null;
   onDrinkPickup: ((playerName: string) => void) | null = null;
+  onWeaponPickup: ((playerName: string, weaponName: string) => void) | null = null;
 
   constructor(serverUrl: string) {
     this.client = new ColyseusClient(serverUrl);
@@ -95,6 +105,7 @@ export class NetworkClient {
       bots: Record<string, NetworkBot>;
       projectiles: NetworkProjectile[];
       energyDrinks?: Record<string, NetworkEnergyDrink>;
+      weaponPickups?: Record<string, NetworkWeaponPickup>;
     }) => {
       // Update players
       this._players.clear();
@@ -118,6 +129,14 @@ export class NetworkClient {
           this._energyDrinks.set(key, drink);
         }
       }
+
+      // Update weapon pickups
+      if (data.weaponPickups) {
+        this._weaponPickups.clear();
+        for (const [key, pickup] of Object.entries(data.weaponPickups)) {
+          this._weaponPickups.set(key, pickup);
+        }
+      }
     });
 
     // Message handlers
@@ -135,6 +154,10 @@ export class NetworkClient {
 
     this.room.onMessage('drinkPickup', (data: { playerId: string; playerName: string }) => {
       this.onDrinkPickup?.(data.playerName);
+    });
+
+    this.room.onMessage('weaponPickup', (data: { playerName: string; weaponName: string }) => {
+      this.onWeaponPickup?.(data.playerName, data.weaponName);
     });
 
     this.room.onMessage('playerLeft', (data: { name: string }) => {
@@ -181,12 +204,17 @@ export class NetworkClient {
     return this._energyDrinks;
   }
 
+  getWeaponPickups(): Map<string, NetworkWeaponPickup> {
+    return this._weaponPickups;
+  }
+
   disconnect(): void {
     this.room?.leave();
     this.room = null;
     this._players.clear();
     this._bots.clear();
     this._energyDrinks.clear();
+    this._weaponPickups.clear();
     this._projectiles = [];
   }
 }

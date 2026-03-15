@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { PLAYER_SPEED, GRAVITY, PLAYER_JUMP_FORCE, MAP_SIZE, PLAYER_MAX_HEALTH, WATER_DAMAGE } from '@watergun/shared';
+import { WEAPONS, DEFAULT_WEAPON, PICKUP_WEAPON_IDS, NUM_WEAPON_PICKUPS, WEAPON_PICKUP_RADIUS, WEAPON_RESPAWN_DELAY } from '@watergun/shared';
+import type { WeaponId } from '@watergun/shared';
 import { SceneManager } from './rendering/SceneManager';
 import { CameraController } from './camera/CameraController';
 import { InputManager } from './input/InputManager';
@@ -65,6 +67,13 @@ export class Game {
   private offlineDrinks: { id: string; x: number; z: number }[] = [];
   private offlineDrinkRespawnTimers: number[] = [];
   private offlineDrinkCounter = 0;
+
+  // Weapons
+  private currentWeapon: WeaponId = DEFAULT_WEAPON;
+  private weaponPickupMeshes: Map<string, THREE.Group> = new Map();
+  private offlineWeaponPickups: { id: string; x: number; z: number; weaponId: WeaponId }[] = [];
+  private offlineWeaponPickupRespawnTimers: number[] = [];
+  private offlineWeaponPickupCounter = 0;
 
   private killFeed: { text: string; time: number }[] = [];
   private clock: THREE.Clock;
@@ -147,6 +156,11 @@ export class Game {
       this.spawnOfflineDrink();
     }
 
+    // Spawn weapon pickups
+    for (let i = 0; i < NUM_WEAPON_PICKUPS; i++) {
+      this.spawnOfflineWeaponPickup();
+    }
+
     this.beginGame();
   }
 
@@ -181,6 +195,10 @@ export class Game {
 
     networkClient.onDrinkPickup = (playerName) => {
       this.addKillFeedEntry(`${playerName} got a Speed Boost!`);
+    };
+
+    networkClient.onWeaponPickup = (playerName, weaponName) => {
+      this.addKillFeedEntry(`${playerName} picked up ${weaponName}!`);
     };
 
     this.beginGame();
@@ -344,6 +362,7 @@ export class Game {
     this.checkProjectileHitsOffline();
     this.updateBots(dt, elapsed);
     this.updateEnergyDrinksOffline(dt);
+    this.updateWeaponPickupsOffline(dt);
     this.sceneManager.updateWater(elapsed);
     this.cameraController.update(this.playerPosition);
     this.updateHUD();
@@ -387,7 +406,8 @@ export class Game {
         const botBox = bot.getHitBox();
         if (botBox.containsPoint(proj.position)) {
           this.waterEffect.removeProjectileAt(i);
-          const killed = bot.takeDamage(WATER_DAMAGE);
+          const dmg = proj.ownerId === 'player' ? WEAPONS[this.currentWeapon].damage : WATER_DAMAGE;
+          const killed = bot.takeDamage(dmg);
           if (proj.ownerId === 'player') {
             this.hitMarkerTimer = 0.15;
             this.soundManager.playSplash();
@@ -512,6 +532,10 @@ export class Game {
         this.spawnProtection = SPAWN_PROTECTION_TIME;
         this.playerPosition.set(myPlayer.x, myPlayer.y, myPlayer.z);
         this.player.visible = true; // Visible again (mirror-only via layers)
+        this.currentWeapon = DEFAULT_WEAPON;
+        const wpn = WEAPONS[DEFAULT_WEAPON];
+        this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
+        this.fireInterval = 1 / wpn.fireRate;
       }
 
       // Sync spawn protection from server
@@ -522,6 +546,14 @@ export class Game {
       // Sync speed boost from server
       if (myPlayer.speedBoostTimer !== undefined) {
         this.speedBoostTimer = myPlayer.speedBoostTimer;
+      }
+
+      // Sync weapon from server
+      if (myPlayer.weapon && myPlayer.weapon !== this.currentWeapon) {
+        this.currentWeapon = myPlayer.weapon as WeaponId;
+        const wpn = WEAPONS[this.currentWeapon];
+        this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
+        this.fireInterval = 1 / wpn.fireRate;
       }
     }
 
@@ -549,6 +581,9 @@ export class Game {
 
     // Energy drinks
     this.updateEnergyDrinksOnline();
+
+    // Weapon pickups
+    this.updateWeaponPickupsOnline();
 
     // Send input to server so other players see us
     const move = this.inputManager.getMovementVector();
@@ -780,7 +815,12 @@ export class Game {
   private updateShooting(elapsed: number): void {
     this.shotThisFrame = false;
     if (this.spawnProtection > 0) return; // can't shoot during spawn protection
-    if (this.inputManager.isShooting() && elapsed - this.lastShootTime >= this.fireInterval) {
+    const weapon = WEAPONS[this.currentWeapon];
+    const interval = 1 / weapon.fireRate;
+    const wantToShoot = weapon.fireMode === 'auto'
+      ? this.inputManager.isShootingHeld()
+      : this.inputManager.isShooting();
+    if (wantToShoot && elapsed - this.lastShootTime >= interval) {
       this.lastShootTime = elapsed;
       this.shotThisFrame = true;
       this.shootWater();
@@ -791,8 +831,8 @@ export class Game {
     const yaw = this.cameraController.getYaw();
     const camera = this.cameraController.getCamera();
 
-    const direction = new THREE.Vector3(0, 0, -1);
-    direction.applyQuaternion(camera.quaternion);
+    const baseDirection = new THREE.Vector3(0, 0, -1);
+    baseDirection.applyQuaternion(camera.quaternion);
 
     // Right direction relative to yaw
     const rightX = -Math.cos(yaw);
@@ -808,7 +848,26 @@ export class Game {
       this.playerPosition.z + rightZ * 0.3 + fwdZ * 0.5
     );
 
-    this.waterEffect.shoot(origin, direction, 30, 'player');
+    const weapon = WEAPONS[this.currentWeapon];
+    const options = {
+      radius: weapon.projectileRadius,
+      color: weapon.projectileColor,
+      trailColor: weapon.trailColor,
+      emissiveColor: weapon.emissiveColor,
+      gravity: weapon.gravity,
+      maxAge: weapon.maxAge,
+    };
+
+    for (let i = 0; i < weapon.pellets; i++) {
+      const dir = baseDirection.clone();
+      if (weapon.spread > 0) {
+        dir.x += (Math.random() - 0.5) * weapon.spread;
+        dir.y += (Math.random() - 0.5) * weapon.spread;
+        dir.z += (Math.random() - 0.5) * weapon.spread;
+        dir.normalize();
+      }
+      this.waterEffect.shoot(origin, dir, weapon.speed, 'player', options);
+    }
     this.soundManager.playShoot();
   }
 
@@ -841,6 +900,10 @@ export class Game {
     this.isDead = false;
     this.playerHealth = PLAYER_MAX_HEALTH;
     this.spawnProtection = SPAWN_PROTECTION_TIME;
+    this.currentWeapon = DEFAULT_WEAPON;
+    const wpn = WEAPONS[DEFAULT_WEAPON];
+    this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
+    this.fireInterval = 1 / wpn.fireRate;
     const spawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
     this.playerPosition.set(
       spawn.x + (Math.random() - 0.5) * 3,
@@ -958,6 +1021,120 @@ export class Game {
     this.energyDrinkMeshes.forEach((mesh) => {
       mesh.children[0].position.y = 0.5 + Math.sin(t * 3) * 0.1;
       mesh.children[0].rotation.y = t * 2;
+    });
+  }
+
+  // === WEAPON PICKUPS ===
+  private createWeaponPickupMesh(weaponId: WeaponId): THREE.Group {
+    const wpn = WEAPONS[weaponId];
+    const group = new THREE.Group();
+    // Gun shape (box)
+    const bodyGeo = new THREE.BoxGeometry(0.25, 0.2, 0.6);
+    const bodyMat = new THREE.MeshStandardMaterial({ color: wpn.gunBodyColor, metalness: 0.4, roughness: 0.4 });
+    const body = new THREE.Mesh(bodyGeo, bodyMat);
+    body.position.y = 0.6;
+    group.add(body);
+    // Tank on top
+    const tankGeo = new THREE.BoxGeometry(0.2, 0.15, 0.3);
+    const tankMat = new THREE.MeshStandardMaterial({ color: wpn.gunTankColor, transparent: true, opacity: 0.8 });
+    const tank = new THREE.Mesh(tankGeo, tankMat);
+    tank.position.y = 0.8;
+    group.add(tank);
+    // Glow ring on ground
+    const glowGeo = new THREE.RingGeometry(0.4, 0.7, 16);
+    const glowMat = new THREE.MeshBasicMaterial({ color: wpn.projectileColor, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.02;
+    group.add(glow);
+    return group;
+  }
+
+  private spawnOfflineWeaponPickup(): void {
+    const half = MAP_SIZE / 2 - 3;
+    const id = `wpn_${++this.offlineWeaponPickupCounter}`;
+    const weaponId = PICKUP_WEAPON_IDS[Math.floor(Math.random() * PICKUP_WEAPON_IDS.length)];
+    const x = (Math.random() - 0.5) * half * 2;
+    const z = (Math.random() - 0.5) * half * 2;
+    this.offlineWeaponPickups.push({ id, x, z, weaponId });
+    const mesh = this.createWeaponPickupMesh(weaponId);
+    mesh.position.set(x, 0, z);
+    this.sceneManager.scene.add(mesh);
+    this.weaponPickupMeshes.set(id, mesh);
+  }
+
+  private updateWeaponPickupsOffline(dt: number): void {
+    // Respawn timers
+    for (let i = this.offlineWeaponPickupRespawnTimers.length - 1; i >= 0; i--) {
+      this.offlineWeaponPickupRespawnTimers[i] -= dt;
+      if (this.offlineWeaponPickupRespawnTimers[i] <= 0) {
+        this.offlineWeaponPickupRespawnTimers.splice(i, 1);
+        this.spawnOfflineWeaponPickup();
+      }
+    }
+
+    // Check pickup
+    for (let i = this.offlineWeaponPickups.length - 1; i >= 0; i--) {
+      const pickup = this.offlineWeaponPickups[i];
+      const dx = this.playerPosition.x - pickup.x;
+      const dz = this.playerPosition.z - pickup.z;
+      if (Math.sqrt(dx * dx + dz * dz) < WEAPON_PICKUP_RADIUS) {
+        this.currentWeapon = pickup.weaponId;
+        const wpn = WEAPONS[this.currentWeapon];
+        this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
+        this.fireInterval = 1 / wpn.fireRate;
+        // Remove mesh
+        const mesh = this.weaponPickupMeshes.get(pickup.id);
+        if (mesh) {
+          this.sceneManager.scene.remove(mesh);
+          this.weaponPickupMeshes.delete(pickup.id);
+        }
+        this.offlineWeaponPickups.splice(i, 1);
+        this.offlineWeaponPickupRespawnTimers.push(WEAPON_RESPAWN_DELAY);
+        this.addKillFeedEntry(`Picked up ${wpn.name}!`);
+        break;
+      }
+    }
+
+    // Animate (bob + rotate)
+    const t = performance.now() / 1000;
+    this.weaponPickupMeshes.forEach((mesh) => {
+      mesh.children[0].position.y = 0.6 + Math.sin(t * 3) * 0.1;
+      mesh.children[0].rotation.y = t * 2;
+      mesh.children[1].position.y = 0.8 + Math.sin(t * 3) * 0.1;
+      mesh.children[1].rotation.y = t * 2;
+    });
+  }
+
+  private updateWeaponPickupsOnline(): void {
+    if (!this.networkClient) return;
+    const serverPickups = this.networkClient.getWeaponPickups();
+
+    // Remove meshes for pickups that no longer exist
+    this.weaponPickupMeshes.forEach((mesh, id) => {
+      if (!serverPickups.has(id)) {
+        this.sceneManager.scene.remove(mesh);
+        this.weaponPickupMeshes.delete(id);
+      }
+    });
+
+    // Add meshes for new pickups
+    serverPickups.forEach((pickup, id) => {
+      if (!this.weaponPickupMeshes.has(id)) {
+        const mesh = this.createWeaponPickupMesh(pickup.weaponId as WeaponId);
+        mesh.position.set(pickup.x, 0, pickup.z);
+        this.sceneManager.scene.add(mesh);
+        this.weaponPickupMeshes.set(id, mesh);
+      }
+    });
+
+    // Animate
+    const t = performance.now() / 1000;
+    this.weaponPickupMeshes.forEach((mesh) => {
+      mesh.children[0].position.y = 0.6 + Math.sin(t * 3) * 0.1;
+      mesh.children[0].rotation.y = t * 2;
+      mesh.children[1].position.y = 0.8 + Math.sin(t * 3) * 0.1;
+      mesh.children[1].rotation.y = t * 2;
     });
   }
 
@@ -1101,6 +1278,12 @@ export class Game {
 
     document.getElementById('pool-indicator')!.style.display = this.isInPool ? 'block' : 'none';
     document.getElementById('slide-indicator')!.style.display = this.isOnSlide ? 'block' : 'none';
+
+    // Weapon name
+    const weaponNameEl = document.getElementById('weapon-name');
+    if (weaponNameEl) {
+      weaponNameEl.textContent = WEAPONS[this.currentWeapon].name;
+    }
 
     // Player list
     const playerListEl = document.getElementById('player-list')!;

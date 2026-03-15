@@ -17,6 +17,7 @@ export class PlayerSchema extends Schema {
   @type('number') spawnProtection: number = 5;
 
   @type('number') speedBoostTimer: number = 0;
+  @type('string') weapon: string = 'water_pistol';
 
   // Server-side only (not synced)
   velocityY: number = 0;
@@ -70,9 +71,17 @@ export class EnergyDrinkSchema extends Schema {
   @type('number') z: number = 0;
 }
 
+export class WeaponPickupSchema extends Schema {
+  @type('string') id: string = '';
+  @type('number') x: number = 0;
+  @type('number') z: number = 0;
+  @type('string') weaponId: string = '';
+}
+
 export class GameRoomState extends Schema {
   @type({ map: PlayerSchema }) players = new MapSchema<PlayerSchema>();
   @type([ProjectileSchema]) projectiles = new ArraySchema<ProjectileSchema>();
   @type({ map: BotSchema }) bots = new MapSchema<BotSchema>();
   @type({ map: EnergyDrinkSchema }) energyDrinks = new MapSchema<EnergyDrinkSchema>();
+  @type({ map: WeaponPickupSchema }) weaponPickups = new MapSchema<WeaponPickupSchema>();
 }

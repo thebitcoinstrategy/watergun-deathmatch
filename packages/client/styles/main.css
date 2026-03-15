@@ -646,6 +646,19 @@ body {
 }
 
 /* === MUTE INDICATOR === */
+#weapon-name {
+  position: absolute;
+  bottom: 60px;
+  right: 10px;
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 4px 12px;
+  border-radius: 5px;
+  text-shadow: 0 0 4px rgba(79, 195, 247, 0.6);
+}
+
 #mute-indicator {
   position: absolute;
   bottom: 10px;

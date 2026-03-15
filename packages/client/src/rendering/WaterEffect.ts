@@ -1,5 +1,14 @@
 import * as THREE from 'three';
 
+export interface ProjectileOptions {
+  radius?: number;
+  color?: string;
+  trailColor?: string;
+  emissiveColor?: string;
+  gravity?: number;
+  maxAge?: number;
+}
+
 interface WaterProjectile {
   mesh: THREE.Mesh;
   trail: THREE.Line;
@@ -7,6 +16,7 @@ interface WaterProjectile {
   velocity: THREE.Vector3;
   age: number;
   maxAge: number;
+  gravity: number;
   ownerId: string; // 'player' or bot name
 }
 
@@ -19,13 +29,20 @@ export class WaterEffect {
     this.scene = scene;
   }
 
-  shoot(origin: THREE.Vector3, direction: THREE.Vector3, speed: number = 30, ownerId: string = 'player'): void {
-    const geo = new THREE.SphereGeometry(0.1, 8, 8);
+  shoot(origin: THREE.Vector3, direction: THREE.Vector3, speed: number = 30, ownerId: string = 'player', options?: ProjectileOptions): void {
+    const radius = options?.radius ?? 0.1;
+    const color = options?.color ?? '#29b6f6';
+    const trailColor = options?.trailColor ?? '#4fc3f7';
+    const emissiveColor = options?.emissiveColor ?? '#0288d1';
+    const gravity = options?.gravity ?? 9.8;
+    const maxAge = options?.maxAge ?? 2;
+
+    const geo = new THREE.SphereGeometry(radius, 8, 8);
     const mat = new THREE.MeshStandardMaterial({
-      color: '#29b6f6',
+      color,
       transparent: true,
       opacity: 0.85,
-      emissive: '#0288d1',
+      emissive: emissiveColor,
       emissiveIntensity: 0.3,
     });
     const mesh = new THREE.Mesh(geo, mat);
@@ -41,7 +58,7 @@ export class WaterEffect {
     }
     trailGeo.setFromPoints(trailPositions);
     const trailMat = new THREE.LineBasicMaterial({
-      color: '#4fc3f7',
+      color: trailColor,
       transparent: true,
       opacity: 0.5,
       linewidth: 2,
@@ -55,7 +72,8 @@ export class WaterEffect {
       trailPositions,
       velocity: direction.clone().multiplyScalar(speed),
       age: 0,
-      maxAge: 2,
+      maxAge,
+      gravity,
       ownerId,
     });
   }
@@ -68,7 +86,7 @@ export class WaterEffect {
       const p = this.projectiles[i];
       p.age += dt;
       p.mesh.position.add(p.velocity.clone().multiplyScalar(dt));
-      p.velocity.y -= 9.8 * dt;
+      p.velocity.y -= p.gravity * dt;
 
       // Update trail
       p.trailPositions.pop();
