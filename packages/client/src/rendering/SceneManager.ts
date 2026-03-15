@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { MAP_SIZE, WALL_HEIGHT } from '@watergun/shared';
 
 export interface PoolZone {
@@ -185,11 +186,53 @@ export class SceneManager {
       });
     }
 
+    // === MIRROR ===
+    this.buildMirror();
+
     // === SWIMMING POOLS ===
     this.buildPools();
 
     // === WATER SLIDES ===
     this.buildSlides();
+  }
+
+  private buildMirror(): void {
+    // Large mirror mounted on the north boundary wall
+    const mirrorWidth = 6;
+    const mirrorHeight = 3;
+    const mirrorGeo = new THREE.PlaneGeometry(mirrorWidth, mirrorHeight);
+    const mirror = new Reflector(mirrorGeo, {
+      color: 0x889999,
+      textureWidth: 512,
+      textureHeight: 512,
+    });
+    // Position on the inside of the north wall, facing south (+Z)
+    mirror.position.set(0, mirrorHeight / 2 + 0.2, -19.7);
+    mirror.rotation.y = 0; // Facing +Z (south)
+    this.scene.add(mirror);
+
+    // Frame around the mirror
+    const frameMat = new THREE.MeshStandardMaterial({ color: '#5d4037', metalness: 0.3, roughness: 0.6 });
+    const frameThickness = 0.15;
+    const frameDepth = 0.1;
+    const frames = [
+      // Top
+      { w: mirrorWidth + frameThickness * 2, h: frameThickness, x: 0, y: mirrorHeight + 0.2 + frameThickness / 2 },
+      // Bottom
+      { w: mirrorWidth + frameThickness * 2, h: frameThickness, x: 0, y: 0.2 - frameThickness / 2 },
+      // Left
+      { w: frameThickness, h: mirrorHeight + frameThickness * 2, x: -(mirrorWidth / 2 + frameThickness / 2), y: mirrorHeight / 2 + 0.2 },
+      // Right
+      { w: frameThickness, h: mirrorHeight + frameThickness * 2, x: mirrorWidth / 2 + frameThickness / 2, y: mirrorHeight / 2 + 0.2 },
+    ];
+    for (const f of frames) {
+      const frameMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(f.w, f.h, frameDepth),
+        frameMat
+      );
+      frameMesh.position.set(f.x, f.y, -19.65);
+      this.scene.add(frameMesh);
+    }
   }
 
   private buildPools(): void {
