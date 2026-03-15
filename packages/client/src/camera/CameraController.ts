@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FirstPersonCam } from './FirstPersonCam';
 import { ThirdPersonCam } from './ThirdPersonCam';
 import { ViewmodelGun } from '../rendering/ViewmodelGun';
+import type { WeaponId } from '@watergun/shared';
 
 export type CameraMode = 'first-person' | 'third-person';
 
@@ -72,8 +73,8 @@ export class CameraController {
     this.viewmodelGun.update(dt, isMoving, isShooting);
   }
 
-  setViewmodelColors(bodyColor: string, tankColor: string): void {
-    this.viewmodelGun.setColors(bodyColor, tankColor);
+  setViewmodelWeapon(weaponId: WeaponId): void {
+    this.viewmodelGun.setWeapon(weaponId);
   }
 
   getYaw(): number {

@@ -533,9 +533,8 @@ export class Game {
         this.playerPosition.set(myPlayer.x, myPlayer.y, myPlayer.z);
         this.player.visible = true; // Visible again (mirror-only via layers)
         this.currentWeapon = DEFAULT_WEAPON;
-        const wpn = WEAPONS[DEFAULT_WEAPON];
-        this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
-        this.fireInterval = 1 / wpn.fireRate;
+        this.cameraController.setViewmodelWeapon(DEFAULT_WEAPON);
+        this.fireInterval = 1 / WEAPONS[DEFAULT_WEAPON].fireRate;
       }
 
       // Sync spawn protection from server
@@ -551,9 +550,8 @@ export class Game {
       // Sync weapon from server
       if (myPlayer.weapon && myPlayer.weapon !== this.currentWeapon) {
         this.currentWeapon = myPlayer.weapon as WeaponId;
-        const wpn = WEAPONS[this.currentWeapon];
-        this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
-        this.fireInterval = 1 / wpn.fireRate;
+        this.cameraController.setViewmodelWeapon(this.currentWeapon);
+        this.fireInterval = 1 / WEAPONS[this.currentWeapon].fireRate;
       }
     }
 
@@ -901,9 +899,8 @@ export class Game {
     this.playerHealth = PLAYER_MAX_HEALTH;
     this.spawnProtection = SPAWN_PROTECTION_TIME;
     this.currentWeapon = DEFAULT_WEAPON;
-    const wpn = WEAPONS[DEFAULT_WEAPON];
-    this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
-    this.fireInterval = 1 / wpn.fireRate;
+    this.cameraController.setViewmodelWeapon(DEFAULT_WEAPON);
+    this.fireInterval = 1 / WEAPONS[DEFAULT_WEAPON].fireRate;
     const spawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
     this.playerPosition.set(
       spawn.x + (Math.random() - 0.5) * 3,
@@ -1080,9 +1077,8 @@ export class Game {
       const dz = this.playerPosition.z - pickup.z;
       if (Math.sqrt(dx * dx + dz * dz) < WEAPON_PICKUP_RADIUS) {
         this.currentWeapon = pickup.weaponId;
-        const wpn = WEAPONS[this.currentWeapon];
-        this.cameraController.setViewmodelColors(wpn.gunBodyColor, wpn.gunTankColor);
-        this.fireInterval = 1 / wpn.fireRate;
+        this.cameraController.setViewmodelWeapon(this.currentWeapon);
+        this.fireInterval = 1 / WEAPONS[this.currentWeapon].fireRate;
         // Remove mesh
         const mesh = this.weaponPickupMeshes.get(pickup.id);
         if (mesh) {
@@ -1091,7 +1087,7 @@ export class Game {
         }
         this.offlineWeaponPickups.splice(i, 1);
         this.offlineWeaponPickupRespawnTimers.push(WEAPON_RESPAWN_DELAY);
-        this.addKillFeedEntry(`Picked up ${wpn.name}!`);
+        this.addKillFeedEntry(`Picked up ${WEAPONS[this.currentWeapon].name}!`);
         break;
       }
     }
