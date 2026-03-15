@@ -3,6 +3,7 @@ export interface LobbyResult {
   name: string;
   roomCode: string;
   color: string;
+  numBots: number;
 }
 
 declare const __BUILD_TIME__: string;
@@ -91,7 +92,7 @@ export function setupLobby(): Promise<LobbyResult> {
         const color = getColorJoin();
         localStorage.setItem('watergun_color', color);
         lobby.style.display = 'none';
-        resolve({ mode: 'online', name, roomCode: roomFromUrl, color });
+        resolve({ mode: 'online', name, roomCode: roomFromUrl, color, numBots: 1 });
       });
       return;
     }
@@ -116,17 +117,18 @@ export function setupLobby(): Promise<LobbyResult> {
       const color = getColor();
       localStorage.setItem('watergun_color', color);
       lobby.style.display = 'none';
-      resolve({ mode: 'offline', name, roomCode: '', color });
+      resolve({ mode: 'offline', name, roomCode: '', color, numBots: 2 });
     });
 
     document.getElementById('btn-online')!.addEventListener('click', () => {
       const name = nameInput.value || 'Player';
       const roomCode = (document.getElementById('room-code') as HTMLInputElement).value.trim() || '1';
+      const numBots = parseInt((document.getElementById('bot-count') as HTMLSelectElement).value) || 0;
       localStorage.setItem('watergun_name', name);
       const color = getColor();
       localStorage.setItem('watergun_color', color);
       lobby.style.display = 'none';
-      resolve({ mode: 'online', name, roomCode, color });
+      resolve({ mode: 'online', name, roomCode, color, numBots });
     });
   });
 }

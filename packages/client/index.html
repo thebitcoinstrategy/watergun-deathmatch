@@ -32,6 +32,7 @@
     <div id="spawn-protection-indicator"></div>
     <div id="speed-boost-indicator"></div>
     <div id="weapon-name"></div>
+    <div id="voice-indicator"></div>
     <div id="pool-indicator">Swimming!</div>
     <div id="slide-indicator">Sliding!</div>
     <div id="connection-info"></div>
@@ -94,6 +95,17 @@
           <div class="lobby-field" style="margin-bottom:12px;">
             <label for="room-code">Room Number</label>
             <input type="text" id="room-code" placeholder="1" maxlength="10" value="1" />
+          </div>
+          <div class="lobby-field" style="margin-bottom:12px;">
+            <label for="bot-count">Bots in Room</label>
+            <select id="bot-count">
+              <option value="0">0 — No Bots</option>
+              <option value="1" selected>1 Bot</option>
+              <option value="2">2 Bots</option>
+              <option value="3">3 Bots</option>
+              <option value="4">4 Bots</option>
+              <option value="5">5 Bots</option>
+            </select>
           </div>
           <button id="btn-online" class="lobby-btn btn-create">Play Online</button>
         </div>

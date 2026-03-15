@@ -61,11 +61,11 @@ export class CameraController {
     }
   }
 
-  update(playerPosition: THREE.Vector3): void {
+  update(playerPosition: THREE.Vector3, crouching = false): void {
     if (this.mode === 'first-person') {
-      this.firstPerson.update(playerPosition);
+      this.firstPerson.update(playerPosition, crouching);
     } else {
-      this.thirdPerson.update(playerPosition);
+      this.thirdPerson.update(playerPosition, crouching);
     }
   }
 

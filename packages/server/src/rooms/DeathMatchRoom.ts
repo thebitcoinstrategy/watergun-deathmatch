@@ -104,15 +104,16 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   private weaponPickupCounter = 0;
   private weaponRespawnTimers: number[] = [];
 
-  onCreate(options: { roomCode?: string }) {
+  onCreate(options: { roomCode?: string; numBots?: number }) {
     this.setState(new GameRoomState());
     this.maxClients = 8;
-    console.log(`[Room ${this.roomId}] Created with roomCode="${options.roomCode || '1'}"`);
+    const numBots = Math.max(0, Math.min(5, options.numBots ?? NUM_BOTS));
+    console.log(`[Room ${this.roomId}] Created with roomCode="${options.roomCode || '1'}", numBots=${numBots}`);
 
     this.setMetadata({ roomCode: options.roomCode || '1' });
 
     // Spawn bots
-    for (let i = 0; i < NUM_BOTS; i++) {
+    for (let i = 0; i < numBots; i++) {
       const bot = new BotSchema();
       bot.id = `bot_${i}`;
       bot.name = BOT_NAMES[i % BOT_NAMES.length];
@@ -209,6 +210,20 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (victimBot && !victimBot.isDead) {
         this.damageBot(victimBot, client.sessionId, damage);
       }
+    });
+
+    // Voice chat signaling relay
+    this.onMessage('voiceOffer', (client: Client, data: { targetId: string; sdp: string }) => {
+      const target = this.clients.find((c: Client) => c.sessionId === data.targetId);
+      if (target) target.send('voiceOffer', { fromId: client.sessionId, sdp: data.sdp });
+    });
+    this.onMessage('voiceAnswer', (client: Client, data: { targetId: string; sdp: string }) => {
+      const target = this.clients.find((c: Client) => c.sessionId === data.targetId);
+      if (target) target.send('voiceAnswer', { fromId: client.sessionId, sdp: data.sdp });
+    });
+    this.onMessage('voiceIce', (client: Client, data: { targetId: string; candidate: any }) => {
+      const target = this.clients.find((c: Client) => c.sessionId === data.targetId);
+      if (target) target.send('voiceIce', { fromId: client.sessionId, candidate: data.candidate });
     });
 
     // Game tick at 20Hz

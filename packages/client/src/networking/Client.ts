@@ -81,6 +81,9 @@ export class NetworkClient {
   onPlayerLeft: PlayerLeaveCallback | null = null;
   onDrinkPickup: ((playerName: string) => void) | null = null;
   onWeaponPickup: ((playerName: string, weaponName: string) => void) | null = null;
+  onVoiceOffer: ((fromId: string, sdp: string) => void) | null = null;
+  onVoiceAnswer: ((fromId: string, sdp: string) => void) | null = null;
+  onVoiceIce: ((fromId: string, candidate: RTCIceCandidateInit) => void) | null = null;
 
   constructor(serverUrl: string) {
     this.client = new ColyseusClient(serverUrl);
@@ -90,8 +93,8 @@ export class NetworkClient {
   get connected(): boolean { return this.room !== null; }
   get roomId(): string { return this.room?.roomId ?? ''; }
 
-  async joinOrCreate(roomCode: string, name: string, color?: string): Promise<string> {
-    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color });
+  async joinOrCreate(roomCode: string, name: string, color?: string, numBots?: number): Promise<string> {
+    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color, numBots });
     this._myId = this.room.sessionId;
     this.setupListeners();
     return roomCode;
@@ -164,6 +167,21 @@ export class NetworkClient {
     this.room.onMessage('playerLeft', (data: { name: string }) => {
       this.onPlayerLeft?.(data.name);
     });
+
+    // Voice chat signaling
+    this.room.onMessage('voiceOffer', (data: { fromId: string; sdp: string }) => {
+      this.onVoiceOffer?.(data.fromId, data.sdp);
+    });
+    this.room.onMessage('voiceAnswer', (data: { fromId: string; sdp: string }) => {
+      this.onVoiceAnswer?.(data.fromId, data.sdp);
+    });
+    this.room.onMessage('voiceIce', (data: { fromId: string; candidate: RTCIceCandidateInit }) => {
+      this.onVoiceIce?.(data.fromId, data.candidate);
+    });
+  }
+
+  sendVoiceSignal(type: string, data: any): void {
+    this.room?.send(type, data);
   }
 
   sendInput(input: {

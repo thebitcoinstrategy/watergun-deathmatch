@@ -26,9 +26,10 @@ export class FirstPersonCam {
     this.pitch = Math.max(-Math.PI / 2 + 0.1, Math.min(Math.PI / 2 - 0.1, this.pitch));
   }
 
-  update(playerPosition: THREE.Vector3): void {
-    // Camera at eye level
-    this.camera.position.set(playerPosition.x, playerPosition.y + 1.7, playerPosition.z);
+  update(playerPosition: THREE.Vector3, crouching = false): void {
+    // Camera at eye level (lower when crouching)
+    const eyeHeight = crouching ? 1.0 : 1.7;
+    this.camera.position.set(playerPosition.x, playerPosition.y + eyeHeight, playerPosition.z);
 
     // Look direction from yaw and pitch
     const lookDir = new THREE.Vector3(

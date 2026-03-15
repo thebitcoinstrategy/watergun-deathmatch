@@ -17,6 +17,7 @@ export class InputManager {
   private touchLookDelta = { x: 0, y: 0 };
   private touchShootBtn = false;
   private touchJumpBtn = false;
+  private touchCrouchBtn = false;
   isTouchDevice = false;
 
   private _lastLookX: number | null = null;
@@ -25,6 +26,7 @@ export class InputManager {
   // Callbacks
   onToggleCamera: (() => void) | null = null;
   onToggleMute: (() => void) | null = null;
+  onToggleVoice: (() => void) | null = null;
 
   constructor() {
     this.isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -34,6 +36,7 @@ export class InputManager {
       this.keys.add(e.code);
       if (e.code === 'KeyV') this.onToggleCamera?.();
       if (e.code === 'KeyM') this.onToggleMute?.();
+      if (e.code === 'KeyE') this.onToggleVoice?.();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
 
@@ -224,6 +227,42 @@ export class InputManager {
       jumpBtn.classList.remove('active');
     }, { passive: false });
 
+    // === CROUCH BUTTON ===
+    const crouchBtn = document.createElement('div');
+    crouchBtn.id = 'btn-crouch';
+    crouchBtn.textContent = 'CROUCH';
+    container.appendChild(crouchBtn);
+
+    crouchBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.touchCrouchBtn = true;
+      crouchBtn.classList.add('active');
+    }, { passive: false });
+    crouchBtn.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.touchCrouchBtn = false;
+      crouchBtn.classList.remove('active');
+    }, { passive: false });
+    crouchBtn.addEventListener('touchcancel', (e) => {
+      e.preventDefault();
+      this.touchCrouchBtn = false;
+      crouchBtn.classList.remove('active');
+    }, { passive: false });
+
+    // === VOICE BUTTON ===
+    const voiceBtn = document.createElement('div');
+    voiceBtn.id = 'btn-voice';
+    voiceBtn.textContent = 'MIC';
+    container.appendChild(voiceBtn);
+
+    voiceBtn.addEventListener('touchstart', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.onToggleVoice?.();
+    }, { passive: false });
+
   }
 
   showTouchControls(): void {
@@ -293,6 +332,10 @@ export class InputManager {
 
   isJumping(): boolean {
     return this.keys.has('Space') || this.touchJumpBtn;
+  }
+
+  isCrouching(): boolean {
+    return this.keys.has('KeyC') || this.keys.has('ControlLeft') || this.keys.has('ControlRight') || this.touchCrouchBtn;
   }
 
   isTabHeld(): boolean {

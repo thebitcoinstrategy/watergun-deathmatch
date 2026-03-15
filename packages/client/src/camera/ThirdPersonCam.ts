@@ -28,7 +28,7 @@ export class ThirdPersonCam {
     this.pitch = Math.max(-0.5, Math.min(1.2, this.pitch));
   }
 
-  update(playerPosition: THREE.Vector3): void {
+  update(playerPosition: THREE.Vector3, _crouching = false): void {
     // Camera position: behind and above the player
     const camX = playerPosition.x - Math.sin(this.yaw) * Math.cos(this.pitch) * this.distance + this.offset.x * Math.cos(this.yaw);
     const camY = playerPosition.y + Math.sin(this.pitch) * this.distance + this.offset.y;

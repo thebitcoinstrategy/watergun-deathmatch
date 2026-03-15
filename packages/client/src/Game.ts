@@ -10,6 +10,7 @@ import { WaterEffect } from './rendering/WaterEffect';
 import { BotEnemy } from './enemies/BotEnemy';
 import { NetworkClient } from './networking/Client';
 import { SoundManager } from './audio/SoundManager';
+import { VoiceChat } from './networking/VoiceChat';
 
 const NUM_BOTS = 2;
 const ROUND_TIME = 300; // 5 minutes
@@ -38,6 +39,10 @@ export class Game {
   private playerPosition: THREE.Vector3;
   private playerVelocityY = 0;
   private isGrounded = true;
+  private canDoubleJump = false;
+  private hasDoubleJumped = false;
+  private jumpKeyReleased = true;
+  private isCrouching = false;
   private playerHealth = PLAYER_MAX_HEALTH;
   private playerKills = 0;
   private playerDeaths = 0;
@@ -83,6 +88,8 @@ export class Game {
   private damageFlashTimer = 0;
   private hitMarkerTimer = 0;
   private portalCooldown = 0;
+  private voiceChat: VoiceChat | null = null;
+  private voicePeerIds: Set<string> = new Set();
   private playerName = 'Player';
   private soundManager: SoundManager;
   private roundTimer = ROUND_TIME;
@@ -202,6 +209,12 @@ export class Game {
       this.addKillFeedEntry(`${playerName} picked up ${weaponName}!`);
     };
 
+    // Voice chat
+    this.voiceChat = new VoiceChat(networkClient.myId, (type, data) => networkClient.sendVoiceSignal(type, data));
+    networkClient.onVoiceOffer = (fromId, sdp) => this.voiceChat?.handleSignal(fromId, { type: 'offer', sdp });
+    networkClient.onVoiceAnswer = (fromId, sdp) => this.voiceChat?.handleSignal(fromId, { type: 'answer', sdp });
+    networkClient.onVoiceIce = (fromId, candidate) => this.voiceChat?.handleSignal(fromId, { type: 'ice', candidate });
+
     this.beginGame();
   }
 
@@ -256,11 +269,38 @@ export class Game {
       document.getElementById('round-over-screen')!.style.display = 'none';
     });
 
+    // Voice chat toggle
+    this.inputManager.onToggleVoice = async () => {
+      if (!this.isOnline || !this.voiceChat) return;
+      try {
+        const enabled = await this.voiceChat.toggle();
+        this.updateVoiceIndicator(enabled);
+        if (enabled) {
+          // Connect to all existing players
+          const players = this.networkClient!.getPlayers();
+          players.forEach((_p, id) => {
+            if (id !== this.networkClient!.myId) {
+              this.voiceChat?.addPeer(id);
+            }
+          });
+          this.addKillFeedEntry('Voice chat enabled (E to disable)');
+        } else {
+          this.addKillFeedEntry('Voice chat disabled');
+        }
+      } catch {
+        this.addKillFeedEntry('Microphone access denied');
+      }
+    };
+
     this.loop();
   }
 
   private returnToLobby(): void {
     // Clean up
+    if (this.voiceChat) {
+      this.voiceChat.destroy();
+      this.voiceChat = null;
+    }
     if (this.networkClient) {
       this.networkClient.disconnect();
       this.networkClient = null;
@@ -324,7 +364,7 @@ export class Game {
       this.updateBots(dt, elapsed);
       this.waterEffect.update(dt);
       this.sceneManager.updateWater(elapsed);
-      this.cameraController.update(this.playerPosition);
+      this.cameraController.update(this.playerPosition, this.isCrouching);
       this.updateHUD();
       return;
     }
@@ -365,7 +405,7 @@ export class Game {
     this.updateEnergyDrinksOffline(dt);
     this.updateWeaponPickupsOffline(dt);
     this.sceneManager.updateWater(elapsed);
-    this.cameraController.update(this.playerPosition);
+    this.cameraController.update(this.playerPosition, this.isCrouching);
     this.updateHUD();
   }
 
@@ -559,7 +599,7 @@ export class Game {
     if (this.isDead) {
       this.respawnTimer -= dt;
       this.sceneManager.updateWater(elapsed);
-      this.cameraController.update(this.playerPosition);
+      this.cameraController.update(this.playerPosition, this.isCrouching);
       this.updateRemotePlayers();
       this.updateNetworkBots();
       this.updateNetworkProjectiles();
@@ -613,7 +653,7 @@ export class Game {
     this.updateNetworkProjectiles();
 
     this.sceneManager.updateWater(elapsed);
-    this.cameraController.update(this.playerPosition);
+    this.cameraController.update(this.playerPosition, this.isCrouching);
     this.updateHUD();
   }
 
@@ -628,7 +668,20 @@ export class Game {
         this.remotePlayers.delete(id);
         const nameSprite = this.remotePlayerNames.get(id);
         if (nameSprite) this.remotePlayerNames.delete(id);
+        // Remove voice peer
+        this.voiceChat?.removePeer(id);
+        this.voicePeerIds.delete(id);
       }
+    }
+
+    // Add voice peers for new players
+    if (this.voiceChat?.isEnabled()) {
+      players.forEach((_p, id) => {
+        if (id !== this.networkClient!.myId && !this.voicePeerIds.has(id)) {
+          this.voicePeerIds.add(id);
+          this.voiceChat?.addPeer(id);
+        }
+      });
     }
 
     // Update or create
@@ -761,8 +814,11 @@ export class Game {
 
     const pool = this.sceneManager.isInPool(this.playerPosition.x, this.playerPosition.z);
     this.isInPool = !!pool;
+    // Crouch
+    this.isCrouching = this.inputManager.isCrouching() && this.isGrounded;
+    const crouchMult = this.isCrouching ? 0.4 : 1.0;
     const boostMult = this.speedBoostTimer > 0 ? SPEED_BOOST_MULTIPLIER : 1.0;
-    const speedMult = (this.isInPool ? 0.5 : 1.0) * boostMult;
+    const speedMult = (this.isInPool ? 0.5 : 1.0) * boostMult * crouchMult;
 
     const moveX = -move.x * Math.cos(yaw) - move.y * Math.sin(yaw);
     const moveZ = move.x * Math.sin(yaw) - move.y * Math.cos(yaw);
@@ -775,9 +831,22 @@ export class Game {
     this.playerPosition.x = resolved.x;
     this.playerPosition.z = resolved.z;
 
-    if (this.inputManager.isJumping() && this.isGrounded) {
+    // Jump / double jump (require key release between jumps)
+    const wantsJump = this.inputManager.isJumping();
+    const jumpPressed = wantsJump && this.jumpKeyReleased;
+    if (!wantsJump) this.jumpKeyReleased = true;
+
+    if (jumpPressed && this.isGrounded) {
       this.playerVelocityY = this.isInPool ? PLAYER_JUMP_FORCE * 1.3 : PLAYER_JUMP_FORCE;
       this.isGrounded = false;
+      this.canDoubleJump = true;
+      this.hasDoubleJumped = false;
+      this.jumpKeyReleased = false;
+    } else if (jumpPressed && this.canDoubleJump && !this.hasDoubleJumped && !this.isGrounded) {
+      this.playerVelocityY = PLAYER_JUMP_FORCE * 0.85;
+      this.hasDoubleJumped = true;
+      this.canDoubleJump = false;
+      this.jumpKeyReleased = false;
     }
 
     const gravMult = this.isInPool ? 0.4 : 1.0;
@@ -809,6 +878,7 @@ export class Game {
       this.playerPosition.y = groundLevel;
       this.playerVelocityY = 0;
       this.isGrounded = true;
+      this.hasDoubleJumped = false;
     }
 
     const half = MAP_SIZE / 2 - 1;
@@ -852,6 +922,7 @@ export class Game {
 
     this.player.position.copy(this.playerPosition);
     this.player.rotation.y = this.cameraController.getYaw() + Math.PI;
+    this.player.scale.y = this.isCrouching ? 0.6 : 1.0;
 
     const isMoving = move.length() > 0;
     animateCharacter(this.player, performance.now() / 1000, isMoving, 0, 0);
@@ -960,6 +1031,27 @@ export class Game {
 
   private addKillFeedEntry(text: string): void {
     this.killFeed.push({ text, time: 4 });
+  }
+
+  private updateVoiceIndicator(enabled: boolean): void {
+    const el = document.getElementById('voice-indicator');
+    if (!el) return;
+    if (enabled) {
+      el.style.display = 'block';
+      el.textContent = 'MIC ON';
+      el.className = '';
+    } else {
+      el.style.display = 'block';
+      el.textContent = 'MIC OFF';
+      el.className = 'muted';
+      setTimeout(() => { el.style.display = 'none'; }, 2000);
+    }
+    // Update mobile button style
+    const btn = document.getElementById('btn-voice');
+    if (btn) {
+      btn.classList.toggle('active', enabled);
+      btn.classList.toggle('off', !enabled);
+    }
   }
 
   private createEnergyDrinkMesh(): THREE.Group {

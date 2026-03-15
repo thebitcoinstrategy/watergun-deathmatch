@@ -24,7 +24,7 @@ async function main() {
 
     try {
       const client = new NetworkClient(SERVER_URL);
-      await client.joinOrCreate(result.roomCode, result.name, result.color);
+      await client.joinOrCreate(result.roomCode, result.name, result.color, result.numBots);
       statusEl.textContent = `Connected to room ${result.roomCode}!`;
 
       setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
