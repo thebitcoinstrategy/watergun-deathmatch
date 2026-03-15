@@ -587,6 +587,9 @@ export class Game {
     const move = this.inputManager.getMovementVector();
     const yaw = this.cameraController.getYaw();
     const pitch = this.cameraController.getPitch();
+    // Compute shoot direction from camera quaternion for server projectiles
+    const cam = this.cameraController.getCamera();
+    const shootDir = new THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
     this.networkClient.sendInput({
       seq: ++this.inputSeq,
       dx: move.x,
@@ -598,6 +601,9 @@ export class Game {
       px: this.playerPosition.x,
       py: this.playerPosition.y,
       pz: this.playerPosition.z,
+      sdx: shootDir.x,
+      sdy: shootDir.y,
+      sdz: shootDir.z,
     });
 
     // Update remote entities from server

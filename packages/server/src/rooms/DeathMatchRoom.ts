@@ -87,6 +87,9 @@ interface PlayerInput {
   shoot: boolean;
   px?: number; // client position for projectile origin
   py?: number;
+  sdx?: number; // shoot direction from camera quaternion
+  sdy?: number;
+  sdz?: number;
   pz?: number;
 }
 
@@ -162,7 +165,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (input.shoot && player.spawnProtection <= 0) {
         player.isShooting = true;
         // Create projectiles for other players to see
-        this.playerShoot(player);
+        this.playerShoot(player, input);
       } else {
         player.isShooting = false;
       }
@@ -319,18 +322,22 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         });
       }
 
-      // Check weapon pickup
+      // Check weapon pickup (collect IDs first to avoid delete-during-iterate)
+      const pickedUpWeapons: string[] = [];
       this.state.weaponPickups.forEach((pickup, pickupId) => {
         const dx = player.x - pickup.x;
         const dz = player.z - pickup.z;
         if (Math.sqrt(dx * dx + dz * dz) < WEAPON_PICKUP_RADIUS) {
           const weaponDef = WEAPONS[pickup.weaponId as WeaponId];
           player.weapon = pickup.weaponId;
-          this.state.weaponPickups.delete(pickupId);
+          pickedUpWeapons.push(pickupId);
           this.weaponRespawnTimers.push(WEAPON_RESPAWN_DELAY);
           this.broadcast('weaponPickup', { playerName: player.name, weaponName: weaponDef?.name || pickup.weaponId });
         }
       });
+      for (const id of pickedUpWeapons) {
+        this.state.weaponPickups.delete(id);
+      }
     });
 
     // Energy drink respawn timers
@@ -588,18 +595,21 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.state.projectiles.push(proj);
   }
 
-  private playerShoot(player: PlayerSchema) {
+  private playerShoot(player: PlayerSchema, input: PlayerInput) {
     const now = Date.now();
     const weaponDef = WEAPONS[(player.weapon || 'water_pistol') as WeaponId] || WEAPONS.water_pistol;
     const minInterval = (1000 / weaponDef.fireRate) * 0.85; // slight tolerance
     if (now - player.lastProjectileTime < minInterval) return;
     player.lastProjectileTime = now;
 
-    // Direction from player rotation — must match client camera look direction
-    // Camera: lookDir = (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch))
-    const dirX = Math.sin(player.rotY) * Math.cos(player.rotX);
-    const dirY = Math.sin(player.rotX);
-    const dirZ = Math.cos(player.rotY) * Math.cos(player.rotX);
+    // Use direction sent from client (computed from camera quaternion)
+    let dirX = input.sdx ?? 0;
+    let dirY = input.sdy ?? 0;
+    let dirZ = input.sdz ?? 0;
+    // Normalize (sanity check)
+    const dirLen = Math.sqrt(dirX * dirX + dirY * dirY + dirZ * dirZ);
+    if (dirLen < 0.01) return; // invalid direction
+    dirX /= dirLen; dirY /= dirLen; dirZ /= dirLen;
 
     // Nozzle origin offset (right and forward relative to yaw)
     const rightX = -Math.cos(player.rotY);
@@ -821,13 +831,27 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.state.energyDrinks.set(drink.id, drink);
   }
 
+  private isInsideCollisionBox(x: number, z: number, margin: number = 1.0): boolean {
+    for (const box of COLLISION_BOXES) {
+      if (x >= box.minX - margin && x <= box.maxX + margin &&
+          z >= box.minZ - margin && z <= box.maxZ + margin) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private spawnWeaponPickup(): void {
     const half = MAP_SIZE / 2 - 3;
     const pickup = new WeaponPickupSchema();
     pickup.id = `wpn_${++this.weaponPickupCounter}`;
     pickup.weaponId = PICKUP_WEAPON_IDS[Math.floor(Math.random() * PICKUP_WEAPON_IDS.length)];
-    pickup.x = (Math.random() - 0.5) * half * 2;
-    pickup.z = (Math.random() - 0.5) * half * 2;
+    // Try up to 20 times to find a position not inside a collision box
+    for (let attempt = 0; attempt < 20; attempt++) {
+      pickup.x = (Math.random() - 0.5) * half * 2;
+      pickup.z = (Math.random() - 0.5) * half * 2;
+      if (!this.isInsideCollisionBox(pickup.x, pickup.z)) break;
+    }
     this.state.weaponPickups.set(pickup.id, pickup);
   }
 }

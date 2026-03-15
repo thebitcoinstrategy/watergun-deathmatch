@@ -177,6 +177,9 @@ export class NetworkClient {
     px: number;
     py: number;
     pz: number;
+    sdx?: number;
+    sdy?: number;
+    sdz?: number;
   }): void {
     this.room?.send('input', input);
   }
