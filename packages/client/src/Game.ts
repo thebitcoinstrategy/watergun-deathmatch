@@ -19,6 +19,13 @@ const EDGE_SPAWNS = [
 
 const SPAWN_PROTECTION_TIME = 5; // seconds of invulnerability after spawn
 
+const NUM_ENERGY_DRINKS = 3;
+const SPEED_BOOST_DURATION = 5;
+const SPEED_BOOST_COOLDOWN = 5;
+const SPEED_BOOST_MULTIPLIER = 1.6;
+const DRINK_PICKUP_RADIUS = 1.5;
+const DRINK_RESPAWN_DELAY = 8;
+
 export class Game {
   private sceneManager: SceneManager;
   private cameraController: CameraController;
@@ -35,6 +42,8 @@ export class Game {
   private isDead = false;
   private respawnTimer = 0;
   private spawnProtection = SPAWN_PROTECTION_TIME;
+  private speedBoostTimer = 0;
+  private speedBoostCooldown = 0;
   private isInPool = false;
   private isOnSlide = false;
 
@@ -50,6 +59,12 @@ export class Game {
   private networkBotNames: Map<string, THREE.Sprite> = new Map();
   private networkProjectileMeshes: Map<string, THREE.Mesh> = new Map();
   private inputSeq = 0;
+
+  // Energy drinks
+  private energyDrinkMeshes: Map<string, THREE.Group> = new Map();
+  private offlineDrinks: { id: string; x: number; z: number }[] = [];
+  private offlineDrinkRespawnTimers: number[] = [];
+  private offlineDrinkCounter = 0;
 
   private killFeed: { text: string; time: number }[] = [];
   private clock: THREE.Clock;
@@ -127,6 +142,11 @@ export class Game {
       this.bots.push(new BotEnemy(this.sceneManager.scene, this.waterEffect, i, this.sceneManager));
     }
 
+    // Spawn energy drinks
+    for (let i = 0; i < NUM_ENERGY_DRINKS; i++) {
+      this.spawnOfflineDrink();
+    }
+
     this.beginGame();
   }
 
@@ -157,6 +177,10 @@ export class Game {
 
     networkClient.onPlayerLeft = (playerName) => {
       this.addKillFeedEntry(`${playerName} left the game`);
+    };
+
+    networkClient.onDrinkPickup = (playerName) => {
+      this.addKillFeedEntry(`${playerName} got a Speed Boost!`);
     };
 
     this.beginGame();
@@ -302,12 +326,24 @@ export class Game {
       this.spawnProtection = Math.max(0, this.spawnProtection - dt);
     }
 
+    // Speed boost countdown
+    if (this.speedBoostTimer > 0) {
+      this.speedBoostTimer = Math.max(0, this.speedBoostTimer - dt);
+      if (this.speedBoostTimer <= 0) {
+        this.speedBoostCooldown = SPEED_BOOST_COOLDOWN;
+      }
+    }
+    if (this.speedBoostCooldown > 0) {
+      this.speedBoostCooldown = Math.max(0, this.speedBoostCooldown - dt);
+    }
+
     this.updatePlayerMovement(dt);
     if (!this.roundOver) this.updateShooting(elapsed);
     this.waterEffect.update(dt);
     this.checkProjectileWallCollisions();
     this.checkProjectileHitsOffline();
     this.updateBots(dt, elapsed);
+    this.updateEnergyDrinksOffline(dt);
     this.sceneManager.updateWater(elapsed);
     this.cameraController.update(this.playerPosition);
     this.updateHUD();
@@ -482,6 +518,11 @@ export class Game {
       if (myPlayer.spawnProtection !== undefined) {
         this.spawnProtection = myPlayer.spawnProtection;
       }
+
+      // Sync speed boost from server
+      if (myPlayer.speedBoostTimer !== undefined) {
+        this.speedBoostTimer = myPlayer.speedBoostTimer;
+      }
     }
 
     if (this.isDead) {
@@ -505,6 +546,9 @@ export class Game {
     this.waterEffect.update(dt);
     this.checkProjectileWallCollisions();
     this.checkProjectileHitsOnline();
+
+    // Energy drinks
+    this.updateEnergyDrinksOnline();
 
     // Send input to server so other players see us
     const move = this.inputManager.getMovementVector();
@@ -672,7 +716,8 @@ export class Game {
 
     const pool = this.sceneManager.isInPool(this.playerPosition.x, this.playerPosition.z);
     this.isInPool = !!pool;
-    const speedMult = this.isInPool ? 0.5 : 1.0;
+    const boostMult = this.speedBoostTimer > 0 ? SPEED_BOOST_MULTIPLIER : 1.0;
+    const speedMult = (this.isInPool ? 0.5 : 1.0) * boostMult;
 
     const moveX = -move.x * Math.cos(yaw) - move.y * Math.sin(yaw);
     const moveZ = move.x * Math.sin(yaw) - move.y * Math.cos(yaw);
@@ -810,6 +855,112 @@ export class Game {
     this.killFeed.push({ text, time: 4 });
   }
 
+  private createEnergyDrinkMesh(): THREE.Group {
+    const group = new THREE.Group();
+    // Can body
+    const canGeo = new THREE.CylinderGeometry(0.2, 0.2, 0.6, 8);
+    const canMat = new THREE.MeshStandardMaterial({ color: 0x00e676, metalness: 0.6, roughness: 0.3 });
+    const can = new THREE.Mesh(canGeo, canMat);
+    can.position.y = 0.5;
+    group.add(can);
+    // Top ring
+    const ringGeo = new THREE.CylinderGeometry(0.15, 0.2, 0.05, 8);
+    const ringMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, metalness: 0.8, roughness: 0.2 });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.y = 0.8;
+    group.add(ring);
+    // Glow ring on ground
+    const glowGeo = new THREE.RingGeometry(0.3, 0.6, 16);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0x00e676, transparent: true, opacity: 0.4, side: THREE.DoubleSide });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.rotation.x = -Math.PI / 2;
+    glow.position.y = 0.02;
+    group.add(glow);
+    return group;
+  }
+
+  private spawnOfflineDrink(): void {
+    const half = MAP_SIZE / 2 - 3;
+    const id = `drink_${++this.offlineDrinkCounter}`;
+    const x = (Math.random() - 0.5) * half * 2;
+    const z = (Math.random() - 0.5) * half * 2;
+    this.offlineDrinks.push({ id, x, z });
+    const mesh = this.createEnergyDrinkMesh();
+    mesh.position.set(x, 0, z);
+    this.sceneManager.scene.add(mesh);
+    this.energyDrinkMeshes.set(id, mesh);
+  }
+
+  private updateEnergyDrinksOffline(dt: number): void {
+    // Respawn timers
+    for (let i = this.offlineDrinkRespawnTimers.length - 1; i >= 0; i--) {
+      this.offlineDrinkRespawnTimers[i] -= dt;
+      if (this.offlineDrinkRespawnTimers[i] <= 0) {
+        this.offlineDrinkRespawnTimers.splice(i, 1);
+        this.spawnOfflineDrink();
+      }
+    }
+
+    // Check pickup
+    if (this.speedBoostTimer <= 0 && this.speedBoostCooldown <= 0) {
+      for (let i = this.offlineDrinks.length - 1; i >= 0; i--) {
+        const drink = this.offlineDrinks[i];
+        const dx = this.playerPosition.x - drink.x;
+        const dz = this.playerPosition.z - drink.z;
+        if (Math.sqrt(dx * dx + dz * dz) < DRINK_PICKUP_RADIUS) {
+          this.speedBoostTimer = SPEED_BOOST_DURATION;
+          // Remove mesh
+          const mesh = this.energyDrinkMeshes.get(drink.id);
+          if (mesh) {
+            this.sceneManager.scene.remove(mesh);
+            this.energyDrinkMeshes.delete(drink.id);
+          }
+          this.offlineDrinks.splice(i, 1);
+          this.offlineDrinkRespawnTimers.push(DRINK_RESPAWN_DELAY);
+          this.addKillFeedEntry('Speed Boost activated!');
+          break;
+        }
+      }
+    }
+
+    // Animate cans (bob + rotate)
+    const t = performance.now() / 1000;
+    this.energyDrinkMeshes.forEach((mesh) => {
+      mesh.children[0].position.y = 0.5 + Math.sin(t * 3) * 0.1;
+      mesh.children[0].rotation.y = t * 2;
+    });
+  }
+
+  private updateEnergyDrinksOnline(): void {
+    if (!this.networkClient) return;
+    const serverDrinks = this.networkClient.getEnergyDrinks();
+
+    // Remove meshes for drinks that no longer exist
+    this.energyDrinkMeshes.forEach((mesh, id) => {
+      if (!serverDrinks.has(id)) {
+        this.sceneManager.scene.remove(mesh);
+        this.energyDrinkMeshes.delete(id);
+      }
+    });
+
+    // Add meshes for new drinks
+    serverDrinks.forEach((drink, id) => {
+      if (!this.energyDrinkMeshes.has(id)) {
+        const mesh = this.createEnergyDrinkMesh();
+        mesh.position.set(drink.x, 0, drink.z);
+        this.sceneManager.scene.add(mesh);
+        this.energyDrinkMeshes.set(id, mesh);
+      }
+    });
+
+    // Animate
+    const t = performance.now() / 1000;
+    this.energyDrinkMeshes.forEach((mesh) => {
+      mesh.children[0].position.y = 0.5 + Math.sin(t * 3) * 0.1;
+      mesh.children[0].rotation.y = t * 2;
+    });
+  }
+
   private createNameSprite(name: string): THREE.Sprite {
     const canvas = document.createElement('canvas');
     canvas.width = 256;
@@ -937,6 +1088,15 @@ export class Game {
       spawnProtEl.textContent = `PROTECTED ${Math.ceil(this.spawnProtection)}s`;
     } else {
       spawnProtEl.style.display = 'none';
+    }
+
+    // Speed boost indicator
+    const boostEl = document.getElementById('speed-boost-indicator')!;
+    if (this.speedBoostTimer > 0) {
+      boostEl.style.display = 'block';
+      boostEl.textContent = `SPEED BOOST ${Math.ceil(this.speedBoostTimer)}s`;
+    } else {
+      boostEl.style.display = 'none';
     }
 
     document.getElementById('pool-indicator')!.style.display = this.isInPool ? 'block' : 'none';

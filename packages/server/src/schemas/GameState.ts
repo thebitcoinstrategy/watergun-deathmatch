@@ -16,11 +16,14 @@ export class PlayerSchema extends Schema {
   @type('boolean') isDead: boolean = false;
   @type('number') spawnProtection: number = 5;
 
+  @type('number') speedBoostTimer: number = 0;
+
   // Server-side only (not synced)
   velocityY: number = 0;
   isGrounded: boolean = true;
   respawnTimer: number = 0;
   lastShootTime: number = 0;
+  speedBoostCooldown: number = 0;
 }
 
 export class ProjectileSchema extends Schema {
@@ -61,8 +64,15 @@ export class BotSchema extends Schema {
   targetPlayerId: string = '';
 }
 
+export class EnergyDrinkSchema extends Schema {
+  @type('string') id: string = '';
+  @type('number') x: number = 0;
+  @type('number') z: number = 0;
+}
+
 export class GameRoomState extends Schema {
   @type({ map: PlayerSchema }) players = new MapSchema<PlayerSchema>();
   @type([ProjectileSchema]) projectiles = new ArraySchema<ProjectileSchema>();
   @type({ map: BotSchema }) bots = new MapSchema<BotSchema>();
+  @type({ map: EnergyDrinkSchema }) energyDrinks = new MapSchema<EnergyDrinkSchema>();
 }

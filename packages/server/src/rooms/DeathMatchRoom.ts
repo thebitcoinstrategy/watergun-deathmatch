@@ -1,5 +1,5 @@
 import { Room, Client } from 'colyseus';
-import { GameRoomState, PlayerSchema, ProjectileSchema, BotSchema } from '../schemas/GameState';
+import { GameRoomState, PlayerSchema, ProjectileSchema, BotSchema, EnergyDrinkSchema } from '../schemas/GameState';
 
 const MAP_SIZE = 40;
 const PLAYER_SPEED = 8;
@@ -20,6 +20,13 @@ const EDGE_SPAWNS = [
 ];
 
 const SPAWN_PROTECTION_TIME = 5; // seconds of invulnerability after spawn
+
+const NUM_ENERGY_DRINKS = 3;
+const SPEED_BOOST_DURATION = 5; // seconds
+const SPEED_BOOST_COOLDOWN = 5; // seconds before can pick up another
+const SPEED_BOOST_MULTIPLIER = 1.6;
+const DRINK_PICKUP_RADIUS = 1.5;
+const DRINK_RESPAWN_DELAY = 8; // seconds before a new drink spawns after pickup
 
 // Collision boxes matching client SceneManager.buildMap()
 // Each box: { minX, maxX, minZ, maxZ, height }
@@ -87,6 +94,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private lastTickTime = Date.now();
   private playerInputs: Map<string, PlayerInput> = new Map();
+  private drinkCounter = 0;
+  private drinkRespawnTimers: number[] = [];
 
   onCreate(options: { roomCode?: string }) {
     this.setState(new GameRoomState());
@@ -108,6 +117,11 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       bot.patrolTargetX = (Math.random() - 0.5) * (MAP_SIZE - 6);
       bot.patrolTargetZ = (Math.random() - 0.5) * (MAP_SIZE - 6);
       this.state.bots.set(bot.id, bot);
+    }
+
+    // Spawn energy drinks
+    for (let i = 0; i < NUM_ENERGY_DRINKS; i++) {
+      this.spawnEnergyDrink();
     }
 
     // Handle player input
@@ -243,6 +257,17 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         player.spawnProtection = Math.max(0, player.spawnProtection - dt);
       }
 
+      // Speed boost countdown
+      if (player.speedBoostTimer > 0) {
+        player.speedBoostTimer = Math.max(0, player.speedBoostTimer - dt);
+        if (player.speedBoostTimer <= 0) {
+          player.speedBoostCooldown = SPEED_BOOST_COOLDOWN;
+        }
+      }
+      if (player.speedBoostCooldown > 0) {
+        player.speedBoostCooldown = Math.max(0, player.speedBoostCooldown - dt);
+      }
+
       // Gravity
       player.velocityY += GRAVITY * dt;
       player.y += player.velocityY * dt;
@@ -256,7 +281,30 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       const half = MAP_SIZE / 2 - 1;
       player.x = Math.max(-half, Math.min(half, player.x));
       player.z = Math.max(-half, Math.min(half, player.z));
+
+      // Check energy drink pickup
+      if (player.speedBoostTimer <= 0 && player.speedBoostCooldown <= 0) {
+        this.state.energyDrinks.forEach((drink, drinkId) => {
+          const dx = player.x - drink.x;
+          const dz = player.z - drink.z;
+          if (Math.sqrt(dx * dx + dz * dz) < DRINK_PICKUP_RADIUS) {
+            player.speedBoostTimer = SPEED_BOOST_DURATION;
+            this.state.energyDrinks.delete(drinkId);
+            this.drinkRespawnTimers.push(DRINK_RESPAWN_DELAY);
+            this.broadcast('drinkPickup', { playerId: player.id, playerName: player.name });
+          }
+        });
+      }
     });
+
+    // Energy drink respawn timers
+    for (let i = this.drinkRespawnTimers.length - 1; i >= 0; i--) {
+      this.drinkRespawnTimers[i] -= dt;
+      if (this.drinkRespawnTimers[i] <= 0) {
+        this.drinkRespawnTimers.splice(i, 1);
+        this.spawnEnergyDrink();
+      }
+    }
 
     // Update bots
     this.state.bots.forEach((bot) => {
@@ -327,6 +375,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         kills: p.kills, deaths: p.deaths, color: p.color,
         isShooting: p.isShooting, isDead: p.isDead,
         spawnProtection: p.spawnProtection,
+        speedBoostTimer: p.speedBoostTimer,
       };
     });
 
@@ -349,7 +398,12 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       });
     }
 
-    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData });
+    const drinksData: Record<string, any> = {};
+    this.state.energyDrinks.forEach((d, id) => {
+      drinksData[id] = { id: d.id, x: d.x, z: d.z };
+    });
+
+    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData, energyDrinks: drinksData });
   }
 
   private updateBot(bot: BotSchema, dt: number) {
@@ -653,5 +707,14 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       x: spawn.x + (Math.random() - 0.5) * 3,
       z: spawn.z + (Math.random() - 0.5) * 3,
     };
+  }
+
+  private spawnEnergyDrink(): void {
+    const half = MAP_SIZE / 2 - 3;
+    const drink = new EnergyDrinkSchema();
+    drink.id = `drink_${++this.drinkCounter}`;
+    drink.x = (Math.random() - 0.5) * half * 2;
+    drink.z = (Math.random() - 0.5) * half * 2;
+    this.state.energyDrinks.set(drink.id, drink);
   }
 }

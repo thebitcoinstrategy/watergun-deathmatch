@@ -207,6 +207,28 @@ body {
   50% { border-color: rgba(79, 195, 247, 1); }
 }
 
+#speed-boost-indicator {
+  position: absolute;
+  top: 85px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #00e676;
+  font-size: 16px;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 2px solid rgba(0, 230, 118, 0.6);
+  text-shadow: 0 0 10px rgba(0, 230, 118, 0.8);
+  display: none;
+  animation: boostPulse 0.5s infinite;
+}
+
+@keyframes boostPulse {
+  0%, 100% { border-color: rgba(0, 230, 118, 0.6); }
+  50% { border-color: rgba(0, 230, 118, 1); }
+}
+
 #pool-indicator {
   position: absolute;
   bottom: 90px;

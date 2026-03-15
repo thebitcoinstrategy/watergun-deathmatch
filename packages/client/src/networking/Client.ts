@@ -15,6 +15,13 @@ export interface NetworkPlayer {
   isShooting: boolean;
   isDead: boolean;
   spawnProtection: number;
+  speedBoostTimer: number;
+}
+
+export interface NetworkEnergyDrink {
+  id: string;
+  x: number;
+  z: number;
 }
 
 export interface NetworkBot {
@@ -56,11 +63,13 @@ export class NetworkClient {
   private _players: Map<string, NetworkPlayer> = new Map();
   private _bots: Map<string, NetworkBot> = new Map();
   private _projectiles: NetworkProjectile[] = [];
+  private _energyDrinks: Map<string, NetworkEnergyDrink> = new Map();
 
   onKill: KillCallback | null = null;
   onHit: HitCallback | null = null;
   onPlayerJoined: PlayerJoinCallback | null = null;
   onPlayerLeft: PlayerLeaveCallback | null = null;
+  onDrinkPickup: ((playerName: string) => void) | null = null;
 
   constructor(serverUrl: string) {
     this.client = new ColyseusClient(serverUrl);
@@ -85,6 +94,7 @@ export class NetworkClient {
       players: Record<string, NetworkPlayer>;
       bots: Record<string, NetworkBot>;
       projectiles: NetworkProjectile[];
+      energyDrinks?: Record<string, NetworkEnergyDrink>;
     }) => {
       // Update players
       this._players.clear();
@@ -100,6 +110,14 @@ export class NetworkClient {
 
       // Update projectiles
       this._projectiles = data.projectiles;
+
+      // Update energy drinks
+      if (data.energyDrinks) {
+        this._energyDrinks.clear();
+        for (const [key, drink] of Object.entries(data.energyDrinks)) {
+          this._energyDrinks.set(key, drink);
+        }
+      }
     });
 
     // Message handlers
@@ -113,6 +131,10 @@ export class NetworkClient {
 
     this.room.onMessage('playerJoined', (data: { name: string }) => {
       this.onPlayerJoined?.(data.name);
+    });
+
+    this.room.onMessage('drinkPickup', (data: { playerId: string; playerName: string }) => {
+      this.onDrinkPickup?.(data.playerName);
     });
 
     this.room.onMessage('playerLeft', (data: { name: string }) => {
@@ -155,11 +177,16 @@ export class NetworkClient {
     return this._players.get(this._myId) ?? null;
   }
 
+  getEnergyDrinks(): Map<string, NetworkEnergyDrink> {
+    return this._energyDrinks;
+  }
+
   disconnect(): void {
     this.room?.leave();
     this.room = null;
     this._players.clear();
     this._bots.clear();
+    this._energyDrinks.clear();
     this._projectiles = [];
   }
 }
