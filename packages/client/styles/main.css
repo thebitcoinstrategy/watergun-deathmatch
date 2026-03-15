@@ -276,22 +276,22 @@ body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%);
+  justify-content: flex-end;
+  padding-bottom: 60px;
+  background: url('/splash.png') center center / cover no-repeat;
   color: white;
   cursor: pointer;
   z-index: 10;
 }
 
 #start-screen h1 {
-  font-size: 48px;
-  margin-bottom: 20px;
-  text-shadow: 0 0 20px rgba(79, 195, 247, 0.8);
+  display: none;
 }
 
 #start-screen p {
-  font-size: 20px;
-  opacity: 0.7;
+  font-size: 22px;
+  color: white;
+  text-shadow: 0 0 10px rgba(0,0,0,0.9), 0 0 30px rgba(79, 195, 247, 0.6);
   animation: pulse 2s infinite;
 }
 
@@ -310,18 +310,20 @@ body {
   display: none;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #1a237e 0%, #0d47a1 50%, #01579b 100%);
+  background: url('/splash.png') center center / cover no-repeat;
   z-index: 15;
 }
 
 .lobby-card {
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(14px);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 16px;
   padding: 40px;
   width: 380px;
   max-width: 90vw;
+  max-height: 90vh;
+  overflow-y: auto;
   color: white;
   text-align: center;
 }
