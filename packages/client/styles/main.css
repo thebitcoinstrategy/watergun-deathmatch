@@ -543,29 +543,6 @@ body {
   transform: scale(0.92);
 }
 
-#btn-cam {
-  position: absolute;
-  top: 60px;
-  right: 10px;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  color: white;
-  font-size: 11px;
-  font-weight: bold;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: auto;
-  touch-action: none;
-  user-select: none;
-}
-
-#btn-cam.active {
-  background: rgba(255, 255, 255, 0.5);
-}
 
 /* === ROUND TIMER === */
 #round-timer {

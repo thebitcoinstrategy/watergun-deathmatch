@@ -221,23 +221,6 @@ export class InputManager {
       jumpBtn.classList.remove('active');
     }, { passive: false });
 
-    // === CAMERA TOGGLE BUTTON ===
-    const camBtn = document.createElement('div');
-    camBtn.id = 'btn-cam';
-    camBtn.textContent = 'CAM';
-    container.appendChild(camBtn);
-
-    camBtn.addEventListener('touchstart', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      this.onToggleCamera?.();
-      camBtn.classList.add('active');
-    }, { passive: false });
-    camBtn.addEventListener('touchend', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      camBtn.classList.remove('active');
-    }, { passive: false });
   }
 
   showTouchControls(): void {

@@ -66,6 +66,10 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) return;
 
+      // Update rotation immediately so projectile direction is correct
+      player.rotY = input.rotY;
+      player.rotX = input.rotX;
+
       // Store latest input for this player
       this.playerInputs.set(client.sessionId, input);
 
@@ -426,6 +430,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
 
   private damagePlayer(player: PlayerSchema, attackerId: string) {
     player.health -= WATER_DAMAGE;
+    // Notify attacker of hit
+    this.broadcast('hit', { attackerId, victimId: player.id });
     if (player.health <= 0) {
       player.health = 0;
       player.isDead = true;
@@ -448,6 +454,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
 
   private damageBot(bot: BotSchema, attackerId: string) {
     bot.health -= WATER_DAMAGE;
+    // Notify attacker of hit
+    this.broadcast('hit', { attackerId, victimId: bot.id });
     if (bot.health <= 0) {
       bot.health = 0;
       bot.isDead = true;

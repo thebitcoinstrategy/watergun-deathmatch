@@ -42,6 +42,7 @@ export interface NetworkProjectile {
 }
 
 export type KillCallback = (killer: string, victim: string, victimName: string) => void;
+export type HitCallback = (attackerId: string, victimId: string) => void;
 export type PlayerJoinCallback = (name: string) => void;
 export type PlayerLeaveCallback = (name: string) => void;
 
@@ -56,6 +57,7 @@ export class NetworkClient {
   private _projectiles: NetworkProjectile[] = [];
 
   onKill: KillCallback | null = null;
+  onHit: HitCallback | null = null;
   onPlayerJoined: PlayerJoinCallback | null = null;
   onPlayerLeft: PlayerLeaveCallback | null = null;
 
@@ -102,6 +104,10 @@ export class NetworkClient {
     // Message handlers
     this.room.onMessage('kill', (data: { killer: string; victim: string; victimName: string }) => {
       this.onKill?.(data.killer, data.victim, data.victimName);
+    });
+
+    this.room.onMessage('hit', (data: { attackerId: string; victimId: string }) => {
+      this.onHit?.(data.attackerId, data.victimId);
     });
 
     this.room.onMessage('playerJoined', (data: { name: string }) => {

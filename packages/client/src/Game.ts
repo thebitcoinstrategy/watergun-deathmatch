@@ -116,6 +116,16 @@ export class Game {
     networkClient.onKill = (killer, _victim, victimName) => {
       const killerName = killer === networkClient.myId ? 'You' : killer;
       this.addKillFeedEntry(`${killerName} soaked ${victimName}!`);
+      if (killer === networkClient.myId) {
+        this.soundManager.playKill();
+      }
+    };
+
+    networkClient.onHit = (attackerId, _victimId) => {
+      if (attackerId === networkClient.myId) {
+        this.hitMarkerTimer = 0.15;
+        this.soundManager.playSplash();
+      }
     };
 
     networkClient.onPlayerJoined = (playerName) => {
