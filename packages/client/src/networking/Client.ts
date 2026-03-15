@@ -94,13 +94,27 @@ export class NetworkClient {
     this.client = new ColyseusClient(serverUrl);
   }
 
+  private _serverMapId: string = '';
+
   get myId(): string { return this._myId; }
   get connected(): boolean { return this.room !== null; }
   get roomId(): string { return this.room?.roomId ?? ''; }
+  get serverMapId(): string { return this._serverMapId; }
 
   async joinOrCreate(roomCode: string, name: string, color?: string, numBots?: number, mapId?: string, pantsColor?: string, hat?: string, sunglasses?: boolean): Promise<string> {
     this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color, numBots, mapId, pantsColor, hat, sunglasses });
     this._myId = this.room.sessionId;
+
+    // Wait for server to tell us which map the room is using before setting up other listeners
+    await new Promise<void>((resolve) => {
+      const timeout = setTimeout(() => resolve(), 2000);
+      this.room!.onMessage('roomInfo', (data: { mapId: string }) => {
+        this._serverMapId = data.mapId;
+        clearTimeout(timeout);
+        resolve();
+      });
+    });
+
     this.setupListeners();
     return roomCode;
   }

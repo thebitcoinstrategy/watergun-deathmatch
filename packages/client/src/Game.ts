@@ -253,7 +253,6 @@ export class Game {
 
   private beginGame(): void {
     this.soundManager.init();
-    this.soundManager.startMusic(this.mapId);
     this.inputManager.requestPointerLock();
     document.getElementById('hud')!.style.display = 'block';
 

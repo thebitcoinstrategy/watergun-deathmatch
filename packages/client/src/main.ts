@@ -1,6 +1,7 @@
 import { Game } from './Game';
 import { setupLobby } from './ui/LobbyScreen';
 import { NetworkClient } from './networking/Client';
+import type { MapId } from '@watergun/shared';
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
@@ -15,10 +16,8 @@ async function main() {
   const result = await setupLobby();
   const statusEl = document.getElementById('connection-status')!;
 
-  // Create game with selected map
-  const game = new Game(canvas, result.mapId);
-
   if (result.mode === 'offline') {
+    const game = new Game(canvas, result.mapId);
     game.startOffline(result.name, result.color, result.pantsColor, result.hat, result.sunglasses);
   } else {
     statusEl.style.display = 'block';
@@ -27,8 +26,12 @@ async function main() {
     try {
       const client = new NetworkClient(SERVER_URL);
       await client.joinOrCreate(result.roomCode, result.name, result.color, result.numBots, result.mapId, result.pantsColor, result.hat, result.sunglasses);
-      statusEl.textContent = `Connected to room ${result.roomCode}!`;
 
+      // Use the server's map (the room creator's map), not what we selected locally
+      const actualMapId = (client.serverMapId || result.mapId) as MapId;
+      const game = new Game(canvas, actualMapId);
+
+      statusEl.textContent = `Connected to room ${result.roomCode}!`;
       setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
       await game.startOnline(client, result.name, result.roomCode);
     } catch (err) {

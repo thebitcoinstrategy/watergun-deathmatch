@@ -224,31 +224,34 @@ export function setupLobby(): Promise<LobbyResult> {
       localStorage.setItem('watergun_name', joinNameInput.value);
     });
 
+    // Lobby music
+    const lobbySound = new SoundManager();
+
     // Check for room in URL
     const params = new URLSearchParams(window.location.search);
     const roomFromUrl = params.get('room');
 
     if (roomFromUrl) {
+      // Pre-fill room code and skip straight to full lobby
+      const roomInput = document.getElementById('room-code') as HTMLInputElement;
+      if (roomInput) roomInput.value = roomFromUrl;
+
+      // Skip start screen, go straight to lobby
       startScreen.style.display = 'none';
       lobby.style.display = 'flex';
-      fullLobby.style.display = 'none';
-      joinOnly.style.display = 'block';
-      document.getElementById('join-only-room')!.textContent = roomFromUrl;
+      fullLobby.style.display = 'block';
+      joinOnly.style.display = 'none';
 
-      document.getElementById('btn-join-direct')!.addEventListener('click', () => {
-        const name = joinNameInput.value || 'Player';
-        localStorage.setItem('watergun_name', name);
-        const color = getColorJoin();
-        localStorage.setItem('watergun_color', color);
-        lobby.style.display = 'none';
-        if (preview) preview.destroy();
-        resolve({ mode: 'online', name, roomCode: roomFromUrl, color, pantsColor: '#2196f3', hat: 'none', sunglasses: false, numBots: 1, mapId: 'aqua_park' });
-      });
-      return;
+      // Start 3D preview
+      if (!preview && previewCanvas) {
+        preview = new CharacterPreview(previewCanvas);
+        updatePreview();
+      }
+
+      // Start lobby music
+      lobbySound.startLobbyMusic();
+      // Don't return — fall through to normal button handlers below
     }
-
-    // Lobby music
-    const lobbySound = new SoundManager();
 
     // Normal flow
     const showLobby = () => {

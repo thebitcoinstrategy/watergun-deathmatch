@@ -253,6 +253,9 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.state.players.set(client.sessionId, player);
     console.log(`[Room ${this.roomId}] Player "${player.name}" joined (${client.sessionId}). Total players: ${this.state.players.size}`);
 
+    // Tell this client which map the room is using
+    client.send('roomInfo', { mapId: this.mapId });
+
     this.broadcast('playerJoined', { name: player.name });
   }
 
