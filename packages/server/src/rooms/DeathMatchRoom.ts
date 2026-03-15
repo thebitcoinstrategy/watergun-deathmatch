@@ -595,12 +595,13 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     if (now - player.lastProjectileTime < minInterval) return;
     player.lastProjectileTime = now;
 
-    // Direction from player rotation
-    const dirX = -Math.sin(player.rotY) * Math.cos(player.rotX);
+    // Direction from player rotation — must match client camera look direction
+    // Camera: lookDir = (sin(yaw)*cos(pitch), sin(pitch), cos(yaw)*cos(pitch))
+    const dirX = Math.sin(player.rotY) * Math.cos(player.rotX);
     const dirY = Math.sin(player.rotX);
-    const dirZ = -Math.cos(player.rotY) * Math.cos(player.rotX);
+    const dirZ = Math.cos(player.rotY) * Math.cos(player.rotX);
 
-    // Nozzle origin offset
+    // Nozzle origin offset (right and forward relative to yaw)
     const rightX = -Math.cos(player.rotY);
     const rightZ = Math.sin(player.rotY);
     const fwdX = Math.sin(player.rotY);
