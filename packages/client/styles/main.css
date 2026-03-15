@@ -692,25 +692,6 @@ body {
   transform: scale(1.05);
 }
 
-/* === BACK TO LOBBY BUTTON === */
-#btn-back-lobby {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(calc(-50% + 80px));
-  background: rgba(255,255,255,0.15);
-  border: 1px solid rgba(255,255,255,0.3);
-  color: white;
-  padding: 5px 12px;
-  border-radius: 6px;
-  font-size: 12px;
-  cursor: pointer;
-  pointer-events: auto;
-}
-
-#btn-back-lobby:hover {
-  background: rgba(255,255,255,0.3);
-}
 
 /* === BUILD VERSION === */
 #build-version {

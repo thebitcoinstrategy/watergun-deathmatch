@@ -180,11 +180,6 @@ export class Game {
       document.getElementById('round-over-screen')!.style.display = 'none';
     });
 
-    // Back to lobby button
-    document.getElementById('btn-back-lobby')!.addEventListener('click', () => {
-      this.returnToLobby();
-    });
-
     this.loop();
   }
 

@@ -36,6 +36,7 @@ let projectileCounter = 0;
 export class DeathMatchRoom extends Room<GameRoomState> {
   private tickInterval: ReturnType<typeof setInterval> | null = null;
   private lastTickTime = Date.now();
+  private playerInputs: Map<string, PlayerInput> = new Map();
 
   onCreate(options: { roomCode?: string }) {
     this.setState(new GameRoomState());
@@ -60,28 +61,15 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       this.state.bots.set(bot.id, bot);
     }
 
-    // Handle player input
+    // Handle player input — just store the latest, applied in gameTick
     this.onMessage('input', (client: Client, input: PlayerInput) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) return;
 
-      player.rotY = input.rotY;
-      player.rotX = input.rotX;
+      // Store latest input for this player
+      this.playerInputs.set(client.sessionId, input);
 
-      // Movement (must match client offline formula)
-      const moveX = -input.dx * Math.cos(input.rotY) - input.dz * Math.sin(input.rotY);
-      const moveZ = input.dx * Math.sin(input.rotY) - input.dz * Math.cos(input.rotY);
-
-      player.x += moveX * PLAYER_SPEED * 0.05;
-      player.z += moveZ * PLAYER_SPEED * 0.05;
-
-      // Jump
-      if (input.jump && player.isGrounded) {
-        player.velocityY = JUMP_FORCE;
-        player.isGrounded = false;
-      }
-
-      // Shooting
+      // Shooting needs immediate response (not deferred to tick)
       if (input.shoot) {
         const now = Date.now();
         if (now - player.lastShootTime >= 200) {
@@ -121,6 +109,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     if (player) {
       this.broadcast('playerLeft', { name: player.name });
       this.state.players.delete(client.sessionId);
+      this.playerInputs.delete(client.sessionId);
     }
   }
 
@@ -134,6 +123,26 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     const now = Date.now();
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
+
+    // Apply stored player inputs (once per tick, using actual dt)
+    this.state.players.forEach((player) => {
+      const input = this.playerInputs.get(player.id);
+      if (!input || player.isDead) return;
+
+      player.rotY = input.rotY;
+      player.rotX = input.rotX;
+
+      const moveX = -input.dx * Math.cos(input.rotY) - input.dz * Math.sin(input.rotY);
+      const moveZ = input.dx * Math.sin(input.rotY) - input.dz * Math.cos(input.rotY);
+
+      player.x += moveX * PLAYER_SPEED * dt;
+      player.z += moveZ * PLAYER_SPEED * dt;
+
+      if (input.jump && player.isGrounded) {
+        player.velocityY = JUMP_FORCE;
+        player.isGrounded = false;
+      }
+    });
 
     // Update players (gravity, bounds, respawn)
     this.state.players.forEach((player) => {
