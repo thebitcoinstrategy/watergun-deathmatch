@@ -21,6 +21,53 @@ const EDGE_SPAWNS = [
   { x: -18, z: 0 }, { x: 18, z: 0 },
 ];
 
+// Collision boxes matching client SceneManager.buildMap()
+// Each box: { minX, maxX, minZ, maxZ, height }
+interface CollisionBox {
+  minX: number; maxX: number;
+  minZ: number; maxZ: number;
+  height: number;
+}
+
+function box(x: number, z: number, w: number, h: number, d: number): CollisionBox {
+  return { minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2, height: h };
+}
+
+const COLLISION_BOXES: CollisionBox[] = [
+  // Boundary walls
+  box(0, -20, 40, 4, 0.5),
+  box(0, 20, 40, 4, 0.5),
+  box(-20, 0, 0.5, 4, 40),
+  box(20, 0, 0.5, 4, 40),
+  // Cover objects (matching client SceneManager)
+  box(-8, -8, 3, 2.5, 0.5),
+  box(8, 8, 3, 2.5, 0.5),
+  box(-6, 6, 0.5, 2.5, 3),
+  box(6, -6, 0.5, 2.5, 3),
+  box(0, 0, 2, 1.5, 2),
+  box(-12, 0, 4, 3, 0.5),
+  box(12, 0, 4, 3, 0.5),
+  box(0, -12, 0.5, 3, 4),
+  box(-5, -14, 2, 2, 2),
+  box(5, 14, 2, 2, 2),
+  box(4, 0, 2, 1, 2),
+  box(-4, 0, 2, 1, 2),
+  box(0, 5, 2, 1.2, 2),
+  box(0, -5, 2, 1.2, 2),
+  box(10, -10, 2, 1.5, 2),
+  box(-10, 10, 2, 1.5, 2),
+  box(6, 3, 0.5, 2.5, 4),
+  box(-6, -3, 0.5, 2.5, 4),
+  box(3, -9, 1.5, 1, 1.5),
+  box(-3, 9, 1.5, 1, 1.5),
+  box(15, 5, 2, 1.5, 2),
+  box(-15, -5, 2, 1.5, 2),
+  box(10, 4, 3, 2, 0.5),
+  box(11.25, 5.5, 0.5, 2, 3),
+  box(-10, -4, 3, 2, 0.5),
+  box(-11.25, -5.5, 0.5, 2, 3),
+];
+
 interface PlayerInput {
   seq: number;
   dx: number;
@@ -29,6 +76,9 @@ interface PlayerInput {
   rotX: number;
   jump: boolean;
   shoot: boolean;
+  px?: number; // client position for projectile origin
+  py?: number;
+  pz?: number;
 }
 
 let projectileCounter = 0;
@@ -43,7 +93,6 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.maxClients = 8;
     console.log(`[Room ${this.roomId}] Created with roomCode="${options.roomCode || '1'}"`);
 
-    // Store room code in metadata for display
     this.setMetadata({ roomCode: options.roomCode || '1' });
 
     // Spawn bots
@@ -61,7 +110,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       this.state.bots.set(bot.id, bot);
     }
 
-    // Handle player input — just store the latest, applied in gameTick
+    // Handle player input
     this.onMessage('input', (client: Client, input: PlayerInput) => {
       const player = this.state.players.get(client.sessionId);
       if (!player || player.isDead) return;
@@ -70,10 +119,23 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       player.rotY = input.rotY;
       player.rotX = input.rotX;
 
+      // Accept client position (client has collision resolution, pools, slides)
+      if (input.px !== undefined && input.py !== undefined && input.pz !== undefined) {
+        // Sanity check: don't allow teleporting too far (anti-cheat basic)
+        const dx = input.px - player.x;
+        const dz = input.pz - player.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        if (dist < 5) { // Allow up to 5 units of desync correction
+          player.x = input.px;
+          player.y = input.py;
+          player.z = input.pz;
+        }
+      }
+
       // Store latest input for this player
       this.playerInputs.set(client.sessionId, input);
 
-      // Shooting needs immediate response (not deferred to tick)
+      // Shooting needs immediate response
       if (input.shoot) {
         const now = Date.now();
         if (now - player.lastShootTime >= 200) {
@@ -104,7 +166,6 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.state.players.set(client.sessionId, player);
     console.log(`[Room ${this.roomId}] Player "${player.name}" joined (${client.sessionId}). Total players: ${this.state.players.size}`);
 
-    // Notify all clients
     this.broadcast('playerJoined', { name: player.name });
   }
 
@@ -128,19 +189,14 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
 
-    // Apply stored player inputs (once per tick, using actual dt)
+    // Player movement is now driven by client position sync (sent with input)
+    // Only handle gravity, jumping, and bounds on server as fallback
     this.state.players.forEach((player) => {
       const input = this.playerInputs.get(player.id);
       if (!input || player.isDead) return;
 
       player.rotY = input.rotY;
       player.rotX = input.rotX;
-
-      const moveX = -input.dx * Math.cos(input.rotY) - input.dz * Math.sin(input.rotY);
-      const moveZ = input.dx * Math.sin(input.rotY) - input.dz * Math.cos(input.rotY);
-
-      player.x += moveX * PLAYER_SPEED * dt;
-      player.z += moveZ * PLAYER_SPEED * dt;
 
       if (input.jump && player.isGrounded) {
         player.velocityY = JUMP_FORCE;
@@ -183,7 +239,6 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       const proj = this.state.projectiles.at(i);
       if (!proj) continue;
 
-      // Store old position for swept collision
       const oldX = proj.x, oldY = proj.y, oldZ = proj.z;
 
       proj.age += dt;
@@ -198,13 +253,19 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         continue;
       }
 
-      // Swept collision: check the ray from old to new position
+      // Check if projectile hit a wall
+      if (this.segmentHitsWall(oldX, oldY, oldZ, proj.x, proj.y, proj.z)) {
+        this.state.projectiles.splice(i, 1);
+        continue;
+      }
+
+      // Swept collision against players and bots
       const projOwner = proj.ownerId;
       let hitSomething = false;
 
       this.state.players.forEach((player) => {
         if (hitSomething || player.isDead || player.id === projOwner) return;
-        if (this.rayIntersectsBox(oldX, oldY, oldZ, proj.x, proj.y, proj.z,
+        if (this.rayIntersectsPlayerBox(oldX, oldY, oldZ, proj.x, proj.y, proj.z,
             player.x, player.y, player.z)) {
           hitSomething = true;
           this.damagePlayer(player, projOwner);
@@ -214,7 +275,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (!hitSomething) {
         this.state.bots.forEach((bot) => {
           if (hitSomething || bot.isDead || bot.id === projOwner) return;
-          if (this.rayIntersectsBox(oldX, oldY, oldZ, proj.x, proj.y, proj.z,
+          if (this.rayIntersectsPlayerBox(oldX, oldY, oldZ, proj.x, proj.y, proj.z,
               bot.x, bot.y, bot.z)) {
             hitSomething = true;
             this.damageBot(bot, projOwner);
@@ -227,7 +288,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       }
     }
 
-    // Broadcast full game state as JSON (bypasses schema sync issues)
+    // Broadcast full game state as JSON
     const playersData: Record<string, any> = {};
     this.state.players.forEach((p) => {
       playersData[p.id] = {
@@ -276,10 +337,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       return;
     }
 
-    // Find closest player
     const closest = this.findClosestPlayer(bot.x, bot.z);
 
-    // State transitions
     if (bot.health < 30 && closest.dist < 8) {
       bot.state = 'flee';
     } else if (closest.dist < 15 && closest.player) {
@@ -325,11 +384,13 @@ export class DeathMatchRoom extends Room<GameRoomState> {
           const dz = closest.player.z - bot.z;
           bot.rotY = Math.atan2(dx, dz);
 
-          // Shoot
           bot.shootTimer += dt;
           if (bot.shootTimer >= 0.3) {
             bot.shootTimer = 0;
-            this.botShoot(bot, closest.player);
+            // Only shoot if line of sight is clear
+            if (this.hasLineOfSight(bot.x, bot.y + 1.2, bot.z, closest.player.x, closest.player.y + 1.2, closest.player.z)) {
+              this.botShoot(bot, closest.player);
+            }
           }
         }
         break;
@@ -348,6 +409,11 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         break;
       }
     }
+
+    // Resolve bot collision with walls
+    const resolved = this.resolveCollision(bot.x, bot.z, 0.4, bot.y);
+    bot.x = resolved.x;
+    bot.z = resolved.z;
 
     // Gravity
     bot.velocityY += GRAVITY * dt;
@@ -378,7 +444,6 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     proj.y = bot.y + 0.85;
     proj.z = bot.z + Math.cos(bot.rotY) * 0.8;
 
-    // Direction with inaccuracy
     const inaccuracy = 0.15;
     proj.vx = ((dx / dist) + (Math.random() - 0.5) * inaccuracy) * 25;
     proj.vy = ((dy / dist) + (Math.random() - 0.5) * 0.1) * 25;
@@ -392,12 +457,10 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     proj.id = `proj_${++projectileCounter}`;
     proj.ownerId = player.id;
 
-    // Calculate direction from player rotation (matches client camera formula)
     const dirX = Math.sin(player.rotY) * Math.cos(player.rotX);
     const dirY = Math.sin(player.rotX);
     const dirZ = Math.cos(player.rotY) * Math.cos(player.rotX);
 
-    // Gun nozzle offset (matches client shootWater origin)
     const rightX = -Math.cos(player.rotY);
     const rightZ = Math.sin(player.rotY);
     const fwdX = Math.sin(player.rotY);
@@ -411,43 +474,76 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     proj.vz = dirZ * WATER_SPEED;
 
     this.state.projectiles.push(proj);
-    console.log(`[Projectile] owner=${player.id} pos=(${proj.x.toFixed(1)},${proj.y.toFixed(1)},${proj.z.toFixed(1)}) dir=(${dirX.toFixed(2)},${dirY.toFixed(2)},${dirZ.toFixed(2)}) rotY=${player.rotY.toFixed(2)} rotX=${player.rotX.toFixed(2)}`);
   }
 
-  private findClosestPlayer(bx: number, bz: number): { player: PlayerSchema | null; dist: number } {
-    let closestDist = Infinity;
-    let closestPlayer: PlayerSchema | null = null;
-    this.state.players.forEach((player) => {
-      if (player.isDead) return;
-      const dist = Math.sqrt((bx - player.x) ** 2 + (bz - player.z) ** 2);
-      if (dist < closestDist) {
-        closestDist = dist;
-        closestPlayer = player;
+  // === COLLISION HELPERS ===
+
+  /** Resolve entity collision against all wall/cover boxes */
+  private resolveCollision(x: number, z: number, radius: number, entityY: number): { x: number; z: number } {
+    for (const box of COLLISION_BOXES) {
+      // Skip if entity is standing on top of the box
+      if (entityY >= box.height - 0.1) continue;
+
+      const minX = box.minX - radius;
+      const maxX = box.maxX + radius;
+      const minZ = box.minZ - radius;
+      const maxZ = box.maxZ + radius;
+
+      if (x > minX && x < maxX && z > minZ && z < maxZ) {
+        const pushLeft = x - minX;
+        const pushRight = maxX - x;
+        const pushTop = z - minZ;
+        const pushBottom = maxZ - z;
+        const minPush = Math.min(pushLeft, pushRight, pushTop, pushBottom);
+
+        if (minPush === pushLeft) x = minX;
+        else if (minPush === pushRight) x = maxX;
+        else if (minPush === pushTop) z = minZ;
+        else z = maxZ;
       }
-    });
-    return { player: closestPlayer, dist: closestDist };
+    }
+    return { x, z };
   }
 
-  /** Ray vs AABB: does the segment from (x1,y1,z1)->(x2,y2,z2) intersect the player hitbox? */
-  private rayIntersectsBox(
+  /** Check if a line segment hits any wall (for projectile-wall collision) */
+  private segmentHitsWall(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): boolean {
+    for (const box of COLLISION_BOXES) {
+      if (this.rayIntersectsAABB(x1, y1, z1, x2, y2, z2,
+          box.minX, 0, box.minZ, box.maxX, box.height, box.maxZ)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Check if bot has line of sight to target (no walls in between) */
+  private hasLineOfSight(x1: number, y1: number, z1: number, x2: number, y2: number, z2: number): boolean {
+    return !this.segmentHitsWall(x1, y1, z1, x2, y2, z2);
+  }
+
+  /** Ray vs player hitbox AABB */
+  private rayIntersectsPlayerBox(
     x1: number, y1: number, z1: number,
     x2: number, y2: number, z2: number,
     bx: number, by: number, bz: number
   ): boolean {
-    // AABB bounds (slightly generous for better feel)
-    const minX = bx - 0.6, maxX = bx + 0.6;
-    const minY = by, maxY = by + 2.2;
-    const minZ = bz - 0.6, maxZ = bz + 0.6;
+    return this.rayIntersectsAABB(x1, y1, z1, x2, y2, z2,
+      bx - 0.6, by, bz - 0.6, bx + 0.6, by + 2.2, bz + 0.6);
+  }
 
-    // Also check if endpoint is inside (handles slow projectiles)
-    if (x2 >= minX && x2 <= maxX && y2 >= minY && y2 <= maxY && z2 >= minZ && z2 <= maxZ) {
-      return true;
-    }
+  /** Generic ray-segment vs AABB intersection test */
+  private rayIntersectsAABB(
+    x1: number, y1: number, z1: number,
+    x2: number, y2: number, z2: number,
+    minX: number, minY: number, minZ: number,
+    maxX: number, maxY: number, maxZ: number
+  ): boolean {
+    // Check if either endpoint is inside
+    if (x1 >= minX && x1 <= maxX && y1 >= minY && y1 <= maxY && z1 >= minZ && z1 <= maxZ) return true;
+    if (x2 >= minX && x2 <= maxX && y2 >= minY && y2 <= maxY && z2 >= minZ && z2 <= maxZ) return true;
 
-    // Ray direction
     const dx = x2 - x1, dy = y2 - y1, dz = z2 - z1;
-
-    let tmin = 0, tmax = 1; // parametric range [0,1] = segment
+    let tmin = 0, tmax = 1;
 
     // X slab
     if (Math.abs(dx) < 1e-8) {
@@ -485,9 +581,22 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     return true;
   }
 
+  private findClosestPlayer(bx: number, bz: number): { player: PlayerSchema | null; dist: number } {
+    let closestDist = Infinity;
+    let closestPlayer: PlayerSchema | null = null;
+    this.state.players.forEach((player) => {
+      if (player.isDead) return;
+      const dist = Math.sqrt((bx - player.x) ** 2 + (bz - player.z) ** 2);
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestPlayer = player;
+      }
+    });
+    return { player: closestPlayer, dist: closestDist };
+  }
+
   private damagePlayer(player: PlayerSchema, attackerId: string) {
     player.health -= WATER_DAMAGE;
-    // Notify attacker of hit
     this.broadcast('hit', { attackerId, victimId: player.id });
     if (player.health <= 0) {
       player.health = 0;
@@ -495,15 +604,10 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       player.deaths++;
       player.respawnTimer = 3;
 
-      // Credit kill
       const attacker = this.state.players.get(attackerId);
-      if (attacker) {
-        attacker.kills++;
-      }
+      if (attacker) attacker.kills++;
       const botAttacker = this.state.bots.get(attackerId);
-      if (botAttacker) {
-        botAttacker.kills++;
-      }
+      if (botAttacker) botAttacker.kills++;
 
       this.broadcast('kill', { killer: attackerId, victim: player.id, victimName: player.name });
     }
@@ -511,8 +615,6 @@ export class DeathMatchRoom extends Room<GameRoomState> {
 
   private damageBot(bot: BotSchema, attackerId: string) {
     bot.health -= WATER_DAMAGE;
-    console.log(`[Hit] ${attackerId} hit bot ${bot.name} → health=${bot.health}`);
-    // Notify attacker of hit
     this.broadcast('hit', { attackerId, victimId: bot.id });
     if (bot.health <= 0) {
       bot.health = 0;
@@ -520,11 +622,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       bot.deaths++;
       bot.respawnTimer = 3;
 
-      // Credit kill
       const attacker = this.state.players.get(attackerId);
-      if (attacker) {
-        attacker.kills++;
-      }
+      if (attacker) attacker.kills++;
 
       this.broadcast('kill', { killer: attackerId, victim: bot.id, victimName: bot.name });
     }

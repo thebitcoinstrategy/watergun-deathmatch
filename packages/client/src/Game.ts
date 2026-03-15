@@ -412,6 +412,9 @@ export class Game {
       rotX: pitch,
       jump: this.inputManager.isJumping(),
       shoot: this.shotThisFrame,
+      px: this.playerPosition.x,
+      py: this.playerPosition.y,
+      pz: this.playerPosition.z,
     });
 
     // Update remote entities from server

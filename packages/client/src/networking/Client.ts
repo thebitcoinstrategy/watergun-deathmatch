@@ -127,6 +127,9 @@ export class NetworkClient {
     rotX: number;
     jump: boolean;
     shoot: boolean;
+    px: number;
+    py: number;
+    pz: number;
   }): void {
     this.room?.send('input', input);
   }
