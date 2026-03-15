@@ -40,6 +40,13 @@ export interface CollisionBox {
   height: number;
 }
 
+export interface PortalZone {
+  x: number;
+  z: number;
+  width: number;
+  facing: 'north' | 'south' | 'east' | 'west';
+}
+
 export class SceneManager {
   scene: THREE.Scene;
   renderer: THREE.WebGLRenderer;
@@ -48,6 +55,7 @@ export class SceneManager {
   slideRamps: SlideRamp[] = [];
   ladderRamps: LadderRamp[] = [];
   collisionBoxes: CollisionBox[] = [];
+  portalMirrors: PortalZone[] = [];
   private waterMeshes: THREE.Mesh[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
@@ -197,44 +205,96 @@ export class SceneManager {
   }
 
   private buildMirror(): void {
-    // Large mirror mounted on the north boundary wall
     const mirrorWidth = 6;
     const mirrorHeight = 3;
-    const mirrorGeo = new THREE.PlaneGeometry(mirrorWidth, mirrorHeight);
-    const mirror = new Reflector(mirrorGeo, {
-      color: 0x889999,
-      textureWidth: 512,
-      textureHeight: 512,
-    });
-    // Position on the inside of the north wall, facing south (+Z)
-    mirror.position.set(0, mirrorHeight / 2 + 0.2, -19.7);
-    mirror.rotation.y = 0; // Facing +Z (south)
-    // Enable layer 1 on the mirror's virtual camera so it renders the local player
-    mirror.camera.layers.enable(1);
-    this.scene.add(mirror);
-
-    // Frame around the mirror
-    const frameMat = new THREE.MeshStandardMaterial({ color: '#5d4037', metalness: 0.3, roughness: 0.6 });
     const frameThickness = 0.15;
     const frameDepth = 0.1;
-    const frames = [
-      // Top
-      { w: mirrorWidth + frameThickness * 2, h: frameThickness, x: 0, y: mirrorHeight + 0.2 + frameThickness / 2 },
-      // Bottom
-      { w: mirrorWidth + frameThickness * 2, h: frameThickness, x: 0, y: 0.2 - frameThickness / 2 },
-      // Left
-      { w: frameThickness, h: mirrorHeight + frameThickness * 2, x: -(mirrorWidth / 2 + frameThickness / 2), y: mirrorHeight / 2 + 0.2 },
-      // Right
-      { w: frameThickness, h: mirrorHeight + frameThickness * 2, x: mirrorWidth / 2 + frameThickness / 2, y: mirrorHeight / 2 + 0.2 },
-    ];
-    for (const f of frames) {
-      const frameMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(f.w, f.h, frameDepth),
-        frameMat
-      );
-      frameMesh.position.set(f.x, f.y, -19.65);
-      this.scene.add(frameMesh);
-    }
+
+    // Helper to build a mirror with frame at a given position/rotation
+    const buildOneMirror = (
+      pos: THREE.Vector3,
+      rotY: number,
+      framePos: THREE.Vector3,
+      portalColor?: number
+    ) => {
+      const mirrorGeo = new THREE.PlaneGeometry(mirrorWidth, mirrorHeight);
+      const mirror = new Reflector(mirrorGeo, {
+        color: portalColor ?? 0x889999,
+        textureWidth: 512,
+        textureHeight: 512,
+      });
+      mirror.position.copy(pos);
+      mirror.rotation.y = rotY;
+      mirror.camera.layers.enable(1);
+      this.scene.add(mirror);
+
+      // Frame
+      const frameMat = new THREE.MeshStandardMaterial({
+        color: portalColor ? '#1a237e' : '#5d4037',
+        metalness: portalColor ? 0.6 : 0.3,
+        roughness: portalColor ? 0.2 : 0.6,
+        emissive: portalColor ? new THREE.Color(portalColor).multiplyScalar(0.3) : undefined,
+      });
+      const frameParts = [
+        { w: mirrorWidth + frameThickness * 2, h: frameThickness, lx: 0, ly: mirrorHeight / 2 + 0.2 + frameThickness / 2 },
+        { w: mirrorWidth + frameThickness * 2, h: frameThickness, lx: 0, ly: -(mirrorHeight / 2 + 0.2) + 0.2 - frameThickness / 2 },
+        { w: frameThickness, h: mirrorHeight + frameThickness * 2, lx: -(mirrorWidth / 2 + frameThickness / 2), ly: 0 },
+        { w: frameThickness, h: mirrorHeight + frameThickness * 2, lx: mirrorWidth / 2 + frameThickness / 2, ly: 0 },
+      ];
+      for (const f of frameParts) {
+        const mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(f.w, f.h, frameDepth),
+          frameMat
+        );
+        mesh.position.set(f.lx, f.ly, 0);
+        const group = new THREE.Group();
+        group.add(mesh);
+        group.position.copy(framePos);
+        group.rotation.y = rotY;
+        this.scene.add(group);
+      }
+
+      // Portal glow effect (only for portal mirrors)
+      if (portalColor) {
+        const glowGeo = new THREE.PlaneGeometry(mirrorWidth + 0.4, mirrorHeight + 0.4);
+        const glowMat = new THREE.MeshBasicMaterial({
+          color: portalColor,
+          transparent: true,
+          opacity: 0.15,
+          side: THREE.DoubleSide,
+        });
+        const glow = new THREE.Mesh(glowGeo, glowMat);
+        glow.position.copy(pos);
+        glow.position.y = pos.y;
+        glow.rotation.y = rotY;
+        this.scene.add(glow);
+      }
+    };
+
+    // 1. Original mirror on north wall (non-portal, just a mirror)
+    buildOneMirror(
+      new THREE.Vector3(0, mirrorHeight / 2 + 0.2, -19.7),
+      0,
+      new THREE.Vector3(0, mirrorHeight / 2 + 0.2, -19.65),
+    );
+
+    // 2. Portal mirror on east wall — facing west (-X)
+    buildOneMirror(
+      new THREE.Vector3(19.7, mirrorHeight / 2 + 0.2, 8),
+      -Math.PI / 2,
+      new THREE.Vector3(19.65, mirrorHeight / 2 + 0.2, 8),
+      0x4fc3f7
+    );
+    this.portalMirrors.push({ x: 19.7, z: 8, width: mirrorWidth, facing: 'west' });
+
+    // 3. Portal mirror on west wall — facing east (+X)
+    buildOneMirror(
+      new THREE.Vector3(-19.7, mirrorHeight / 2 + 0.2, -8),
+      Math.PI / 2,
+      new THREE.Vector3(-19.65, mirrorHeight / 2 + 0.2, -8),
+      0xe040fb
+    );
+    this.portalMirrors.push({ x: -19.7, z: -8, width: mirrorWidth, facing: 'east' });
   }
 
   private buildPools(): void {

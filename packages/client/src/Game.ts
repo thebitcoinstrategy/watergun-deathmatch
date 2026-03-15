@@ -82,6 +82,7 @@ export class Game {
   private fireInterval = 1 / 5;
   private damageFlashTimer = 0;
   private hitMarkerTimer = 0;
+  private portalCooldown = 0;
   private playerName = 'Player';
   private soundManager: SoundManager;
   private roundTimer = ROUND_TIME;
@@ -813,6 +814,41 @@ export class Game {
     const half = MAP_SIZE / 2 - 1;
     this.playerPosition.x = Math.max(-half, Math.min(half, this.playerPosition.x));
     this.playerPosition.z = Math.max(-half, Math.min(half, this.playerPosition.z));
+
+    // Portal mirror teleportation
+    if (this.portalCooldown > 0) {
+      this.portalCooldown -= dt;
+    } else {
+      for (const portal of this.sceneManager.portalMirrors) {
+        const portalHalfW = portal.width / 2;
+        let inPortal = false;
+        if (portal.facing === 'west' || portal.facing === 'east') {
+          // Portal on east/west wall — check x proximity and z range
+          if (Math.abs(this.playerPosition.x - portal.x) < 1.2 &&
+              this.playerPosition.z > portal.z - portalHalfW &&
+              this.playerPosition.z < portal.z + portalHalfW) {
+            inPortal = true;
+          }
+        } else {
+          // Portal on north/south wall — check z proximity and x range
+          if (Math.abs(this.playerPosition.z - portal.z) < 1.2 &&
+              this.playerPosition.x > portal.x - portalHalfW &&
+              this.playerPosition.x < portal.x + portalHalfW) {
+            inPortal = true;
+          }
+        }
+        if (inPortal) {
+          // Teleport to random position
+          const mapHalf = MAP_SIZE / 2 - 3;
+          this.playerPosition.x = (Math.random() - 0.5) * mapHalf * 2;
+          this.playerPosition.z = (Math.random() - 0.5) * mapHalf * 2;
+          this.playerPosition.y = 0;
+          this.portalCooldown = 2; // 2 second cooldown
+          this.addKillFeedEntry('Teleported through portal!');
+          break;
+        }
+      }
+    }
 
     this.player.position.copy(this.playerPosition);
     this.player.rotation.y = this.cameraController.getYaw() + Math.PI;
