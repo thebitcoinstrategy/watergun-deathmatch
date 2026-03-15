@@ -80,8 +80,9 @@ export class Game {
     this.player.position.copy(this.playerPosition);
     this.sceneManager.scene.add(this.player);
 
-    // Camera is always first-person; no toggle needed
-    this.player.visible = false;
+    // Hide own model from main camera but keep visible for mirror reflection
+    // Layer 1 = "mirror only" — main camera disabled layer 1, Reflector sees all layers
+    this.setPlayerMirrorOnly();
 
     this.inputManager.onToggleMute = () => {
       const muted = this.soundManager.toggleMute();
@@ -96,11 +97,18 @@ export class Game {
     });
   }
 
+  /** Put the local player on layer 1 only (invisible to main camera, visible to mirror) */
+  private setPlayerMirrorOnly(): void {
+    this.player.traverse((obj) => {
+      obj.layers.set(1);
+    });
+  }
+
   private setPlayerColor(color: string): void {
     this.sceneManager.scene.remove(this.player);
     this.player = createBlockyCharacter(color);
     this.player.position.copy(this.playerPosition);
-    this.player.visible = false; // First-person: own model hidden
+    this.setPlayerMirrorOnly();
     this.sceneManager.scene.add(this.player);
   }
 
@@ -447,7 +455,7 @@ export class Game {
         // Server says we died
         this.isDead = true;
         this.respawnTimer = 3;
-        this.player.visible = false;
+        this.player.visible = false; // Fully hidden when dead
         this.soundManager.playDeath();
       }
       if (!myPlayer.isDead && this.isDead) {
@@ -455,7 +463,7 @@ export class Game {
         this.isDead = false;
         this.playerHealth = PLAYER_MAX_HEALTH;
         this.playerPosition.set(myPlayer.x, myPlayer.y, myPlayer.z);
-        this.player.visible = false;
+        this.player.visible = true; // Visible again (mirror-only via layers)
       }
     }
 
@@ -752,7 +760,7 @@ export class Game {
       this.isDead = true;
       this.playerDeaths++;
       this.respawnTimer = 3;
-      this.player.visible = false;
+      this.player.visible = false; // Fully hidden when dead
       this.soundManager.playDeath();
       this.addKillFeedEntry(`${attackerName} soaked you!`);
 
@@ -775,7 +783,7 @@ export class Game {
       spawn.z + (Math.random() - 0.5) * 3
     );
     this.player.position.copy(this.playerPosition);
-    this.player.visible = false;
+    this.player.visible = true; // Visible again (mirror-only via layers)
   }
 
   private addKillFeedEntry(text: string): void {

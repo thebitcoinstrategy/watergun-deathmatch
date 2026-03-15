@@ -15,6 +15,10 @@ export class CameraController {
     this.firstPerson = new FirstPersonCam();
     this.thirdPerson = new ThirdPersonCam();
 
+    // Disable layer 1 on cameras so the local player model (mirror-only) is not rendered
+    this.firstPerson.camera.layers.disable(1);
+    this.thirdPerson.camera.layers.disable(1);
+
     // Create the FPS viewmodel gun and attach it to the FPS camera
     this.viewmodelGun = new ViewmodelGun();
     this.firstPerson.camera.add(this.viewmodelGun.group);

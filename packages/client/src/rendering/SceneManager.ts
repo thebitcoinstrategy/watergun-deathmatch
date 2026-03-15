@@ -209,6 +209,8 @@ export class SceneManager {
     // Position on the inside of the north wall, facing south (+Z)
     mirror.position.set(0, mirrorHeight / 2 + 0.2, -19.7);
     mirror.rotation.y = 0; // Facing +Z (south)
+    // Enable layer 1 on the mirror's virtual camera so it renders the local player
+    mirror.camera.layers.enable(1);
     this.scene.add(mirror);
 
     // Frame around the mirror
