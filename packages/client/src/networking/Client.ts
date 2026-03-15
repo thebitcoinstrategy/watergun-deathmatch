@@ -134,6 +134,10 @@ export class NetworkClient {
     this.room?.send('input', input);
   }
 
+  reportHit(victimId: string): void {
+    this.room?.send('clientHit', { victimId });
+  }
+
   getPlayers(): Map<string, NetworkPlayer> {
     return this._players;
   }

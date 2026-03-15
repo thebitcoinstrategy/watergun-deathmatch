@@ -135,16 +135,35 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       // Store latest input for this player
       this.playerInputs.set(client.sessionId, input);
 
-      // Shooting needs immediate response
+      // Track shooting state for animation broadcast
       if (input.shoot) {
-        const now = Date.now();
-        if (now - player.lastShootTime >= 200) {
-          player.lastShootTime = now;
-          player.isShooting = true;
-          this.spawnProjectile(player);
-        }
+        player.isShooting = true;
       } else {
         player.isShooting = false;
+      }
+    });
+
+    // Client-side hit detection: client reports when their projectile hits someone
+    this.onMessage('clientHit', (client: Client, data: { victimId: string }) => {
+      const attacker = this.state.players.get(client.sessionId);
+      if (!attacker || attacker.isDead) return;
+
+      // Rate limit: max 1 hit per 150ms per attacker
+      const now = Date.now();
+      if (now - attacker.lastShootTime < 150) return;
+      attacker.lastShootTime = now;
+
+      // Try to damage a player
+      const victimPlayer = this.state.players.get(data.victimId);
+      if (victimPlayer && !victimPlayer.isDead && victimPlayer.id !== client.sessionId) {
+        this.damagePlayer(victimPlayer, client.sessionId);
+        return;
+      }
+
+      // Try to damage a bot
+      const victimBot = this.state.bots.get(data.victimId);
+      if (victimBot && !victimBot.isDead) {
+        this.damageBot(victimBot, client.sessionId);
       }
     });
 
@@ -448,30 +467,6 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     proj.vx = ((dx / dist) + (Math.random() - 0.5) * inaccuracy) * 25;
     proj.vy = ((dy / dist) + (Math.random() - 0.5) * 0.1) * 25;
     proj.vz = ((dz / dist) + (Math.random() - 0.5) * inaccuracy) * 25;
-
-    this.state.projectiles.push(proj);
-  }
-
-  private spawnProjectile(player: PlayerSchema) {
-    const proj = new ProjectileSchema();
-    proj.id = `proj_${++projectileCounter}`;
-    proj.ownerId = player.id;
-
-    const dirX = Math.sin(player.rotY) * Math.cos(player.rotX);
-    const dirY = Math.sin(player.rotX);
-    const dirZ = Math.cos(player.rotY) * Math.cos(player.rotX);
-
-    const rightX = -Math.cos(player.rotY);
-    const rightZ = Math.sin(player.rotY);
-    const fwdX = Math.sin(player.rotY);
-    const fwdZ = Math.cos(player.rotY);
-
-    proj.x = player.x + rightX * 0.3 + fwdX * 0.5;
-    proj.y = player.y + 1.5;
-    proj.z = player.z + rightZ * 0.3 + fwdZ * 0.5;
-    proj.vx = dirX * WATER_SPEED;
-    proj.vy = dirY * WATER_SPEED;
-    proj.vz = dirZ * WATER_SPEED;
 
     this.state.projectiles.push(proj);
   }

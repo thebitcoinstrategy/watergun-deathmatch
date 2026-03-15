@@ -352,9 +352,62 @@ export class Game {
     }
   }
 
+  /** Client-side hit detection for online mode — same logic as offline but against network entities */
+  private checkProjectileHitsOnline(): void {
+    if (!this.networkClient) return;
+    const projectiles = this.waterEffect.getProjectiles();
+    const players = this.networkClient.getPlayers();
+    const bots = this.networkClient.getBots();
+
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const proj = projectiles[i];
+      if (proj.ownerId !== 'player') continue; // Only check our own shots
+
+      let hit = false;
+
+      // Check against remote players
+      players.forEach((player, id) => {
+        if (hit) return;
+        if (id === this.networkClient!.myId) return; // Don't hit self
+        if (player.isDead) return;
+        const box = new THREE.Box3(
+          new THREE.Vector3(player.x - 0.5, player.y, player.z - 0.5),
+          new THREE.Vector3(player.x + 0.5, player.y + 2.2, player.z + 0.5)
+        );
+        if (box.containsPoint(proj.position)) {
+          hit = true;
+          this.networkClient!.reportHit(player.id);
+          this.hitMarkerTimer = 0.15;
+          this.soundManager.playSplash();
+        }
+      });
+
+      // Check against network bots
+      if (!hit) {
+        bots.forEach((bot, id) => {
+          if (hit) return;
+          if (bot.isDead) return;
+          const box = new THREE.Box3(
+            new THREE.Vector3(bot.x - 0.5, bot.y, bot.z - 0.5),
+            new THREE.Vector3(bot.x + 0.5, bot.y + 2.2, bot.z + 0.5)
+          );
+          if (box.containsPoint(proj.position)) {
+            hit = true;
+            this.networkClient!.reportHit(bot.id);
+            this.hitMarkerTimer = 0.15;
+            this.soundManager.playSplash();
+          }
+        });
+      }
+
+      if (hit) {
+        this.waterEffect.removeProjectileAt(i);
+      }
+    }
+  }
+
   // === ONLINE MODE ===
-  // Uses client-side prediction: local player moves and shoots locally,
-  // inputs are sent to server, other players/bots sync from server.
+  // Client-side hit detection: local projectiles check against server-synced entity positions.
   private updateOnline(dt: number, elapsed: number): void {
     if (!this.inputManager.isPointerLocked() || !this.networkClient) return;
 
@@ -397,8 +450,9 @@ export class Game {
     // Local shooting
     this.updateShooting(elapsed);
 
-    // Local projectile updates and hit detection
+    // Local projectile updates and client-side hit detection
     this.waterEffect.update(dt);
+    this.checkProjectileHitsOnline();
 
     // Send input to server so other players see us
     const move = this.inputManager.getMovementVector();
