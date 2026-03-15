@@ -2,12 +2,10 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
+    "rootDir": "src",
     "module": "CommonJS",
     "moduleResolution": "node",
-    "experimentalDecorators": true,
-    "paths": {
-      "@watergun/shared": ["../shared/src"]
-    }
+    "experimentalDecorators": true
   },
   "include": ["src"]
 }
