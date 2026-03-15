@@ -15,9 +15,9 @@ const ROUND_TIME = 300; // 5 minutes
 const EDGE_SPAWNS = [
   new THREE.Vector3(-17, 0, -17), new THREE.Vector3(17, 0, -17),
   new THREE.Vector3(-17, 0, 17), new THREE.Vector3(17, 0, 17),
-  new THREE.Vector3(0, 0, -18), new THREE.Vector3(0, 0, 18),
-  new THREE.Vector3(-18, 0, 0), new THREE.Vector3(18, 0, 0),
 ];
+
+const SPAWN_PROTECTION_TIME = 5; // seconds of invulnerability after spawn
 
 export class Game {
   private sceneManager: SceneManager;
@@ -34,6 +34,7 @@ export class Game {
   private playerDeaths = 0;
   private isDead = false;
   private respawnTimer = 0;
+  private spawnProtection = SPAWN_PROTECTION_TIME;
   private isInPool = false;
   private isOnSlide = false;
 
@@ -76,7 +77,12 @@ export class Game {
     this.cameraController.addToScene(this.sceneManager.scene);
 
     this.player = createBlockyCharacter('#4fc3f7');
-    this.playerPosition = new THREE.Vector3(0, 0, 5);
+    const initSpawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
+    this.playerPosition = new THREE.Vector3(
+      initSpawn.x + (Math.random() - 0.5) * 3,
+      0,
+      initSpawn.z + (Math.random() - 0.5) * 3
+    );
     this.player.position.copy(this.playerPosition);
     this.sceneManager.scene.add(this.player);
 
@@ -291,6 +297,11 @@ export class Game {
 
     this.showScoreboard = this.inputManager.isTabHeld() || this.roundOver;
 
+    // Spawn protection countdown
+    if (this.spawnProtection > 0) {
+      this.spawnProtection = Math.max(0, this.spawnProtection - dt);
+    }
+
     this.updatePlayerMovement(dt);
     if (!this.roundOver) this.updateShooting(elapsed);
     this.waterEffect.update(dt);
@@ -462,8 +473,14 @@ export class Game {
         // Server says we respawned
         this.isDead = false;
         this.playerHealth = PLAYER_MAX_HEALTH;
+        this.spawnProtection = SPAWN_PROTECTION_TIME;
         this.playerPosition.set(myPlayer.x, myPlayer.y, myPlayer.z);
         this.player.visible = true; // Visible again (mirror-only via layers)
+      }
+
+      // Sync spawn protection from server
+      if (myPlayer.spawnProtection !== undefined) {
+        this.spawnProtection = myPlayer.spawnProtection;
       }
     }
 
@@ -717,6 +734,7 @@ export class Game {
 
   private updateShooting(elapsed: number): void {
     this.shotThisFrame = false;
+    if (this.spawnProtection > 0) return; // can't shoot during spawn protection
     if (this.inputManager.isShooting() && elapsed - this.lastShootTime >= this.fireInterval) {
       this.lastShootTime = elapsed;
       this.shotThisFrame = true;
@@ -751,6 +769,7 @@ export class Game {
 
   private takeDamage(amount: number, attackerName: string): void {
     if (this.isDead) return;
+    if (this.spawnProtection > 0) return; // invulnerable during spawn protection
     this.playerHealth -= amount;
     this.damageFlashTimer = 0.2;
     this.soundManager.playHurt();
@@ -776,6 +795,7 @@ export class Game {
   private respawnPlayer(): void {
     this.isDead = false;
     this.playerHealth = PLAYER_MAX_HEALTH;
+    this.spawnProtection = SPAWN_PROTECTION_TIME;
     const spawn = EDGE_SPAWNS[Math.floor(Math.random() * EDGE_SPAWNS.length)];
     this.playerPosition.set(
       spawn.x + (Math.random() - 0.5) * 3,
@@ -908,6 +928,15 @@ export class Game {
         `Respawning in ${Math.ceil(this.respawnTimer)}...`;
     } else {
       deathScreen.style.display = 'none';
+    }
+
+    // Spawn protection indicator
+    const spawnProtEl = document.getElementById('spawn-protection-indicator')!;
+    if (this.spawnProtection > 0 && !this.isDead) {
+      spawnProtEl.style.display = 'block';
+      spawnProtEl.textContent = `PROTECTED ${Math.ceil(this.spawnProtection)}s`;
+    } else {
+      spawnProtEl.style.display = 'none';
     }
 
     document.getElementById('pool-indicator')!.style.display = this.isInPool ? 'block' : 'none';

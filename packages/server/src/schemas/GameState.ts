@@ -14,6 +14,7 @@ export class PlayerSchema extends Schema {
   @type('string') color: string = '#4fc3f7';
   @type('boolean') isShooting: boolean = false;
   @type('boolean') isDead: boolean = false;
+  @type('number') spawnProtection: number = 5;
 
   // Server-side only (not synced)
   velocityY: number = 0;

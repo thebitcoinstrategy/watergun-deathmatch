@@ -184,6 +184,29 @@ body {
   transition: opacity 0.1s;
 }
 
+/* === SPAWN PROTECTION === */
+#spawn-protection-indicator {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #4fc3f7;
+  font-size: 18px;
+  font-weight: bold;
+  background: rgba(0, 0, 0, 0.5);
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 2px solid rgba(79, 195, 247, 0.6);
+  text-shadow: 0 0 10px rgba(79, 195, 247, 0.8);
+  display: none;
+  animation: protectionPulse 1s infinite;
+}
+
+@keyframes protectionPulse {
+  0%, 100% { border-color: rgba(79, 195, 247, 0.6); }
+  50% { border-color: rgba(79, 195, 247, 1); }
+}
+
 #pool-indicator {
   position: absolute;
   bottom: 90px;

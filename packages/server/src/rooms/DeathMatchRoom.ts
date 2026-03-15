@@ -17,9 +17,9 @@ const BOT_NAMES = ['Splasher', 'Drizzle', 'Tsunami', 'Squirt', 'Puddle', 'Soaker
 const EDGE_SPAWNS = [
   { x: -17, z: -17 }, { x: 17, z: -17 },
   { x: -17, z: 17 }, { x: 17, z: 17 },
-  { x: 0, z: -18 }, { x: 0, z: 18 },
-  { x: -18, z: 0 }, { x: 18, z: 0 },
 ];
+
+const SPAWN_PROTECTION_TIME = 5; // seconds of invulnerability after spawn
 
 // Collision boxes matching client SceneManager.buildMap()
 // Each box: { minX, maxX, minZ, maxZ, height }
@@ -135,8 +135,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       // Store latest input for this player
       this.playerInputs.set(client.sessionId, input);
 
-      // Track shooting state for animation broadcast
-      if (input.shoot) {
+      // Track shooting state for animation broadcast (blocked during spawn protection)
+      if (input.shoot && player.spawnProtection <= 0) {
         player.isShooting = true;
       } else {
         player.isShooting = false;
@@ -148,14 +148,18 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       const attacker = this.state.players.get(client.sessionId);
       if (!attacker || attacker.isDead) return;
 
+      // Can't deal damage during spawn protection
+      if (attacker.spawnProtection > 0) return;
+
       // Rate limit: max 1 hit per 150ms per attacker
       const now = Date.now();
       if (now - attacker.lastShootTime < 150) return;
       attacker.lastShootTime = now;
 
-      // Try to damage a player
+      // Try to damage a player (skip if victim has spawn protection)
       const victimPlayer = this.state.players.get(data.victimId);
       if (victimPlayer && !victimPlayer.isDead && victimPlayer.id !== client.sessionId) {
+        if (victimPlayer.spawnProtection > 0) return; // victim is protected
         this.damagePlayer(victimPlayer, client.sessionId);
         return;
       }
@@ -177,6 +181,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     player.name = options.name || `Player ${this.state.players.size + 1}`;
     player.color = options.color || PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
     player.health = MAX_HEALTH;
+    player.spawnProtection = SPAWN_PROTECTION_TIME;
 
     const spawn = this.getEdgeSpawn();
     player.x = spawn.x;
@@ -233,6 +238,11 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         return;
       }
 
+      // Spawn protection countdown
+      if (player.spawnProtection > 0) {
+        player.spawnProtection = Math.max(0, player.spawnProtection - dt);
+      }
+
       // Gravity
       player.velocityY += GRAVITY * dt;
       player.y += player.velocityY * dt;
@@ -284,6 +294,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
 
       this.state.players.forEach((player) => {
         if (hitSomething || player.isDead || player.id === projOwner) return;
+        if (player.spawnProtection > 0) return; // protected after spawn
         if (this.rayIntersectsPlayerBox(oldX, oldY, oldZ, proj.x, proj.y, proj.z,
             player.x, player.y, player.z)) {
           hitSomething = true;
@@ -627,6 +638,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
   private respawnPlayer(player: PlayerSchema) {
     player.isDead = false;
     player.health = MAX_HEALTH;
+    player.spawnProtection = SPAWN_PROTECTION_TIME;
     const spawn = this.getEdgeSpawn();
     player.x = spawn.x;
     player.z = spawn.z;
