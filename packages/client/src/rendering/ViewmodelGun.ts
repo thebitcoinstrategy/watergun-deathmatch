@@ -53,7 +53,6 @@ export class ViewmodelGun {
       case 'splash_shotgun': this.buildSplashShotgun(); break;
       case 'water_sniper': this.buildWaterSniper(); break;
       case 'bubble_blaster': this.buildBubbleBlaster(); break;
-      case 'squirt_minigun': this.buildSquirtMinigun(); break;
       case 'water_balloon': this.buildWaterBalloon(); break;
     }
 
@@ -214,35 +213,6 @@ export class ViewmodelGun {
     this.addMesh(new THREE.CylinderGeometry(0.03, 0.04, 0.14, 8), '#7b1fa2', 0, -0.1, 0.04, { rotX: 0, rotZ: 0 });
     // Trigger guard — small ring
     this.addMesh(new THREE.BoxGeometry(0.06, 0.02, 0.06), '#7b1fa2', 0, -0.04, 0.01);
-  }
-
-  // ──────────────────────────────────────────────
-  // SQUIRT MINI-GUN — multi-barrel rotary gun
-  // ──────────────────────────────────────────────
-  private buildSquirtMinigun(): void {
-    // Central barrel hub
-    this.addMesh(new THREE.CylinderGeometry(0.06, 0.06, 0.08, 10), '#f9a825', 0, 0, -0.35, { rotX: Math.PI / 2, metalness: 0.4 });
-    // 4 rotating barrels around the hub
-    const barrelOffsets = [
-      [0.035, 0.035], [-0.035, 0.035], [0.035, -0.035], [-0.035, -0.035],
-    ];
-    for (const [ox, oy] of barrelOffsets) {
-      this.addMesh(new THREE.CylinderGeometry(0.015, 0.015, 0.45, 6), '#fdd835', ox, oy, -0.2, { rotX: Math.PI / 2, metalness: 0.3 });
-    }
-    // Barrel shroud
-    this.addMesh(new THREE.CylinderGeometry(0.07, 0.05, 0.06, 10), '#e0a800', 0, 0, -0.12, { rotX: Math.PI / 2, metalness: 0.3 });
-    // Main body box behind the barrels
-    this.addMesh(new THREE.BoxGeometry(0.12, 0.12, 0.2), '#f9a825', 0, 0, 0);
-    // Handle — vertical grip
-    this.addMesh(new THREE.BoxGeometry(0.07, 0.16, 0.07), '#e65100', 0, -0.12, 0.03, { rotX: 0.1 });
-    // Top handle / carry grip
-    this.addMesh(new THREE.BoxGeometry(0.04, 0.04, 0.14), '#fdd835', 0, 0.09, -0.02);
-    this.addMesh(new THREE.BoxGeometry(0.04, 0.06, 0.02), '#fdd835', 0, 0.07, -0.09);
-    this.addMesh(new THREE.BoxGeometry(0.04, 0.06, 0.02), '#fdd835', 0, 0.07, 0.05);
-    // Ammo tank — big cylinder on the side
-    this.addMesh(new THREE.CylinderGeometry(0.045, 0.045, 0.16, 8), '#ffee58', 0.08, -0.04, -0.02, { transparent: true, opacity: 0.7 });
-    // Feed tube from tank to body
-    this.addMesh(new THREE.CylinderGeometry(0.01, 0.01, 0.06, 6), '#fbc02d', 0.06, 0, -0.02, { rotZ: Math.PI / 2 });
   }
 
   // ──────────────────────────────────────────────

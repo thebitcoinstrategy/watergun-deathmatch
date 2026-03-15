@@ -1,4 +1,4 @@
-export type WeaponId = 'water_pistol' | 'super_soaker' | 'splash_shotgun' | 'water_sniper' | 'bubble_blaster' | 'squirt_minigun' | 'water_balloon';
+export type WeaponId = 'water_pistol' | 'super_soaker' | 'splash_shotgun' | 'water_sniper' | 'bubble_blaster' | 'water_balloon';
 export type FireMode = 'semi' | 'auto';
 
 export interface WeaponDef {
@@ -52,12 +52,6 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
     projectileRadius: 0.15, projectileColor: '#e040fb', trailColor: '#ea80fc',
     emissiveColor: '#aa00ff', gunBodyColor: '#9c27b0', gunTankColor: '#e040fb',
   },
-  squirt_minigun: {
-    id: 'squirt_minigun', name: 'Squirt Mini-Gun', damage: 6, fireRate: 15, fireMode: 'auto',
-    speed: 28, gravity: 9.8, pellets: 1, spread: 0.15, maxAge: 2,
-    projectileRadius: 0.07, projectileColor: '#ffee58', trailColor: '#fff176',
-    emissiveColor: '#f9a825', gunBodyColor: '#f9a825', gunTankColor: '#ffee58',
-  },
   water_balloon: {
     id: 'water_balloon', name: 'Water Balloon', damage: 30, fireRate: 1, fireMode: 'semi',
     speed: 15, gravity: 20, pellets: 1, spread: 0, maxAge: 3,
@@ -67,7 +61,7 @@ export const WEAPONS: Record<WeaponId, WeaponDef> = {
 };
 
 export const DEFAULT_WEAPON: WeaponId = 'water_pistol';
-export const PICKUP_WEAPON_IDS: WeaponId[] = ['super_soaker', 'splash_shotgun', 'water_sniper', 'bubble_blaster', 'squirt_minigun', 'water_balloon'];
+export const PICKUP_WEAPON_IDS: WeaponId[] = ['super_soaker', 'splash_shotgun', 'water_sniper', 'bubble_blaster', 'water_balloon'];
 export const NUM_WEAPON_PICKUPS = 3;
 export const WEAPON_PICKUP_RADIUS = 1.5;
 export const WEAPON_RESPAWN_DELAY = 8;
