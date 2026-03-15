@@ -171,11 +171,11 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.tickInterval = setInterval(() => this.gameTick(), 50);
   }
 
-  onJoin(client: Client, options: { name?: string }) {
+  onJoin(client: Client, options: { name?: string; color?: string }) {
     const player = new PlayerSchema();
     player.id = client.sessionId;
     player.name = options.name || `Player ${this.state.players.size + 1}`;
-    player.color = PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
+    player.color = options.color || PLAYER_COLORS[this.state.players.size % PLAYER_COLORS.length];
     player.health = MAX_HEALTH;
 
     const spawn = this.getEdgeSpawn();

@@ -96,9 +96,18 @@ export class Game {
     });
   }
 
-  startOffline(name: string): void {
+  private setPlayerColor(color: string): void {
+    this.sceneManager.scene.remove(this.player);
+    this.player = createBlockyCharacter(color);
+    this.player.position.copy(this.playerPosition);
+    this.player.visible = false; // First-person: own model hidden
+    this.sceneManager.scene.add(this.player);
+  }
+
+  startOffline(name: string, color?: string): void {
     this.playerName = name;
     this.isOnline = false;
+    if (color) this.setPlayerColor(color);
 
     for (let i = 0; i < NUM_BOTS; i++) {
       this.bots.push(new BotEnemy(this.sceneManager.scene, this.waterEffect, i, this.sceneManager));

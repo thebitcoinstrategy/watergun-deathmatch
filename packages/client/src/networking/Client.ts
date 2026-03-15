@@ -69,8 +69,8 @@ export class NetworkClient {
   get connected(): boolean { return this.room !== null; }
   get roomId(): string { return this.room?.roomId ?? ''; }
 
-  async joinOrCreate(roomCode: string, name: string): Promise<string> {
-    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name });
+  async joinOrCreate(roomCode: string, name: string, color?: string): Promise<string> {
+    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color });
     this._myId = this.room.sessionId;
     this.setupListeners();
     return roomCode;

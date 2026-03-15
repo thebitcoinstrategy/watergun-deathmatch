@@ -17,14 +17,14 @@ async function main() {
   const statusEl = document.getElementById('connection-status')!;
 
   if (result.mode === 'offline') {
-    game.startOffline(result.name);
+    game.startOffline(result.name, result.color);
   } else {
     statusEl.style.display = 'block';
     statusEl.textContent = `Joining room ${result.roomCode}...`;
 
     try {
       const client = new NetworkClient(SERVER_URL);
-      await client.joinOrCreate(result.roomCode, result.name);
+      await client.joinOrCreate(result.roomCode, result.name, result.color);
       statusEl.textContent = `Connected to room ${result.roomCode}!`;
 
       setTimeout(() => { statusEl.style.display = 'none'; }, 2000);
