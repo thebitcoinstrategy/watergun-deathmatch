@@ -277,6 +277,7 @@ export class Game {
     this.updatePlayerMovement(dt);
     if (!this.roundOver) this.updateShooting(elapsed);
     this.waterEffect.update(dt);
+    this.checkProjectileWallCollisions();
     this.checkProjectileHitsOffline();
     this.updateBots(dt, elapsed);
     this.sceneManager.updateWater(elapsed);
@@ -349,6 +350,22 @@ export class Game {
         }
       }
       if (hitBot) continue;
+    }
+  }
+
+  /** Remove projectiles that hit walls/cover objects */
+  private checkProjectileWallCollisions(): void {
+    const projectiles = this.waterEffect.getProjectiles();
+    for (let i = projectiles.length - 1; i >= 0; i--) {
+      const pos = projectiles[i].position;
+      for (const box of this.sceneManager.collisionBoxes) {
+        if (pos.y < box.height &&
+            pos.x >= box.min.x && pos.x <= box.max.x &&
+            pos.z >= box.min.y && pos.z <= box.max.y) {
+          this.waterEffect.removeProjectileAt(i);
+          break;
+        }
+      }
     }
   }
 
@@ -450,8 +467,9 @@ export class Game {
     // Local shooting
     this.updateShooting(elapsed);
 
-    // Local projectile updates and client-side hit detection
+    // Local projectile updates, wall collision, and client-side hit detection
     this.waterEffect.update(dt);
+    this.checkProjectileWallCollisions();
     this.checkProjectileHitsOnline();
 
     // Send input to server so other players see us

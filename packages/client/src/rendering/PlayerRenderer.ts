@@ -15,6 +15,18 @@ export function createBlockyCharacter(color: string = '#4fc3f7'): THREE.Group {
   head.castShadow = true;
   character.add(head);
 
+  // Face (children of head, positioned on front face = +Z local)
+  const eyeMat = new THREE.MeshStandardMaterial({ color: '#222222' });
+  const leftEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.05), eyeMat);
+  leftEye.position.set(-0.15, 0.08, 0.35);
+  head.add(leftEye);
+  const rightEye = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.12, 0.05), eyeMat);
+  rightEye.position.set(0.15, 0.08, 0.35);
+  head.add(rightEye);
+  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.05), eyeMat);
+  mouth.position.set(0, -0.15, 0.35);
+  head.add(mouth);
+
   // Torso
   const torso = new THREE.Mesh(new THREE.BoxGeometry(0.8, 1.0, 0.5), mat);
   torso.position.y = 1.1;
