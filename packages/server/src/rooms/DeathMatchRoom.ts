@@ -383,14 +383,20 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     proj.id = `proj_${++projectileCounter}`;
     proj.ownerId = player.id;
 
-    // Calculate direction from player rotation
+    // Calculate direction from player rotation (matches client camera formula)
     const dirX = Math.sin(player.rotY) * Math.cos(player.rotX);
     const dirY = Math.sin(player.rotX);
     const dirZ = Math.cos(player.rotY) * Math.cos(player.rotX);
 
-    proj.x = player.x + Math.sin(player.rotY) * 0.8;
-    proj.y = player.y + 0.85;
-    proj.z = player.z + Math.cos(player.rotY) * 0.8;
+    // Gun nozzle offset (matches client shootWater origin)
+    const rightX = -Math.cos(player.rotY);
+    const rightZ = Math.sin(player.rotY);
+    const fwdX = Math.sin(player.rotY);
+    const fwdZ = Math.cos(player.rotY);
+
+    proj.x = player.x + rightX * 0.3 + fwdX * 0.5;
+    proj.y = player.y + 1.5;
+    proj.z = player.z + rightZ * 0.3 + fwdZ * 0.5;
     proj.vx = dirX * WATER_SPEED;
     proj.vy = dirY * WATER_SPEED;
     proj.vz = dirZ * WATER_SPEED;

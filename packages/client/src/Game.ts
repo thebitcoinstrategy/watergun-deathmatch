@@ -393,12 +393,13 @@ export class Game {
     // Send input to server so other players see us
     const move = this.inputManager.getMovementVector();
     const yaw = this.cameraController.getYaw();
+    const pitch = this.cameraController.getPitch();
     this.networkClient.sendInput({
       seq: ++this.inputSeq,
       dx: move.x,
       dz: move.y,
       rotY: yaw,
-      rotX: 0,
+      rotX: pitch,
       jump: this.inputManager.isJumping(),
       shoot: this.shotThisFrame,
     });
@@ -443,9 +444,27 @@ export class Game {
       }
 
       model.visible = !player.isDead;
+
+      // Detect movement by comparing to last known position
+      const prevPos = model.userData.lastPos as THREE.Vector3 | undefined;
+      const isMoving = prevPos
+        ? Math.abs(player.x - prevPos.x) > 0.01 || Math.abs(player.z - prevPos.z) > 0.01
+        : false;
+      model.userData.lastPos = new THREE.Vector3(player.x, player.y, player.z);
+
       model.position.set(player.x, player.y, player.z);
       model.rotation.y = player.rotY + Math.PI;
-      animateCharacter(model, performance.now() / 1000, true, 0, 0);
+
+      // Shoot recoil timer
+      if (player.isShooting) {
+        model.userData.shootTimer = 0.3;
+      }
+      const shootTimer = model.userData.shootTimer ?? 0;
+      if (shootTimer > 0) {
+        model.userData.shootTimer = shootTimer - 0.016;
+      }
+
+      animateCharacter(model, performance.now() / 1000, isMoving, shootTimer, -(player.rotX || 0));
     });
   }
 
@@ -475,9 +494,16 @@ export class Game {
       }
 
       model.visible = !bot.isDead;
+
+      const prevPos = model.userData.lastPos as THREE.Vector3 | undefined;
+      const isMoving = prevPos
+        ? Math.abs(bot.x - prevPos.x) > 0.01 || Math.abs(bot.z - prevPos.z) > 0.01
+        : false;
+      model.userData.lastPos = new THREE.Vector3(bot.x, bot.y, bot.z);
+
       model.position.set(bot.x, bot.y, bot.z);
       model.rotation.y = bot.rotY + Math.PI;
-      animateCharacter(model, performance.now() / 1000, true, 0, 0);
+      animateCharacter(model, performance.now() / 1000, isMoving, 0, 0);
     });
   }
 

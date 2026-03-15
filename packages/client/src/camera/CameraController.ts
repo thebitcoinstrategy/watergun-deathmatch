@@ -73,4 +73,10 @@ export class CameraController {
       ? this.firstPerson.getYaw()
       : this.thirdPerson.getYaw();
   }
+
+  getPitch(): number {
+    return this.mode === 'first-person'
+      ? this.firstPerson.getPitch()
+      : this.thirdPerson.getPitch();
+  }
 }
