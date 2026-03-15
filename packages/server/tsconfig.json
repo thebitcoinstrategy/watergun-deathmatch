@@ -1,0 +1,13 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "experimentalDecorators": true,
+    "paths": {
+      "@watergun/shared": ["../shared/src"]
+    }
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@watergun/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@watergun/shared": "*",
+    "colyseus": "^0.15.0",
+    "@colyseus/ws-transport": "^0.15.0",
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.7.0",
+    "tsx": "^4.19.0"
+  }
+}

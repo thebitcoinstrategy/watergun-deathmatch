@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>Water Gun Deathmatch</title>
+  <link rel="stylesheet" href="/styles/main.css" />
+</head>
+<body>
+  <canvas id="game-canvas"></canvas>
+  <div id="crosshair" style="display:none;">
+    <div class="ch-top"></div>
+    <div class="ch-bottom"></div>
+    <div class="ch-left"></div>
+    <div class="ch-right"></div>
+  </div>
+
+  <div id="hud">
+    <div id="hit-marker" style="display:none;">X</div>
+    <div id="health-bar">
+      <div id="health-fill"></div>
+      <span id="health-text">100</span>
+    </div>
+    <div id="score-display">Kills: 0 | Deaths: 0</div>
+    <div id="round-timer">5:00</div>
+    <div id="camera-mode" style="display:none;"></div>
+    <div id="mute-indicator"></div>
+    <div id="controls-hint">WASD: Move | Space: Jump | Click: Shoot | M: Mute | TAB: Scoreboard</div>
+    <div id="kill-feed"></div>
+    <div id="damage-overlay"></div>
+    <div id="pool-indicator">Swimming!</div>
+    <div id="slide-indicator">Sliding!</div>
+    <div id="connection-info"></div>
+    <div id="scoreboard-overlay">
+      <h2>Scoreboard</h2>
+      <table id="scoreboard-table">
+        <thead><tr><th>Name</th><th>Kills</th><th>Deaths</th></tr></thead>
+        <tbody id="scoreboard-body"></tbody>
+      </table>
+    </div>
+    <div id="death-screen">
+      <div id="death-text">You got soaked!</div>
+      <div id="respawn-timer">Respawning in 3...</div>
+    </div>
+    <div id="round-over-screen" style="display:none;">
+      <div id="round-over-text">Round Over!</div>
+      <div id="round-winner"></div>
+      <button id="btn-new-round" style="pointer-events:auto;">New Round</button>
+    </div>
+    <button id="btn-back-lobby" style="pointer-events:auto;">Menu</button>
+  </div>
+
+  <div id="connection-status"></div>
+
+  <div id="start-screen">
+    <h1>Water Gun Deathmatch</h1>
+    <p>Click to start</p>
+  </div>
+
+  <div id="lobby-screen">
+    <div class="lobby-card">
+      <h1>Water Gun Deathmatch</h1>
+
+      <!-- Full lobby (normal entry) -->
+      <div id="full-lobby">
+        <div class="lobby-field">
+          <label for="player-name">Your Name</label>
+          <input type="text" id="player-name" placeholder="Enter your name" maxlength="15" value="" />
+        </div>
+
+        <div class="lobby-buttons">
+          <button id="btn-offline" class="lobby-btn btn-offline">Play Solo (vs Bots)</button>
+
+          <div class="lobby-divider"><span>OR PLAY ONLINE</span></div>
+
+          <div class="lobby-field" style="margin-bottom:12px;">
+            <label for="room-code">Room Number</label>
+            <input type="text" id="room-code" placeholder="1" maxlength="10" value="1" />
+          </div>
+          <button id="btn-online" class="lobby-btn btn-create">Play Online</button>
+        </div>
+      </div>
+
+      <!-- Join-only view (opened via shared link) -->
+      <div id="join-only" style="display:none;">
+        <p class="join-only-info">You've been invited to room <strong id="join-only-room"></strong></p>
+
+        <div class="lobby-field">
+          <label for="join-only-name">Your Name</label>
+          <input type="text" id="join-only-name" placeholder="Enter your name" maxlength="15" value="" />
+        </div>
+
+        <button id="btn-join-direct" class="lobby-btn btn-create" style="width:100%;margin-top:10px;">Join Game</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
