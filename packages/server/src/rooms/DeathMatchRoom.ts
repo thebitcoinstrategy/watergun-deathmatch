@@ -208,6 +208,38 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         this.state.projectiles.splice(i, 1);
       }
     }
+
+    // Broadcast full game state as JSON (bypasses schema sync issues)
+    const playersData: Record<string, any> = {};
+    this.state.players.forEach((p) => {
+      playersData[p.id] = {
+        id: p.id, name: p.name, x: p.x, y: p.y, z: p.z,
+        rotY: p.rotY, rotX: p.rotX, health: p.health,
+        kills: p.kills, deaths: p.deaths, color: p.color,
+        isShooting: p.isShooting, isDead: p.isDead,
+      };
+    });
+
+    const botsData: Record<string, any> = {};
+    this.state.bots.forEach((b) => {
+      botsData[b.id] = {
+        id: b.id, name: b.name, x: b.x, y: b.y, z: b.z,
+        rotY: b.rotY, health: b.health, kills: b.kills,
+        deaths: b.deaths, color: b.color, isDead: b.isDead,
+      };
+    });
+
+    const projectilesData: any[] = [];
+    for (let i = 0; i < this.state.projectiles.length; i++) {
+      const pr = this.state.projectiles.at(i);
+      if (!pr) continue;
+      projectilesData.push({
+        id: pr.id, x: pr.x, y: pr.y, z: pr.z,
+        vx: pr.vx, vy: pr.vy, vz: pr.vz, ownerId: pr.ownerId,
+      });
+    }
+
+    this.broadcast('gameState', { players: playersData, bots: botsData, projectiles: projectilesData });
   }
 
   private updateBot(bot: BotSchema, dt: number) {

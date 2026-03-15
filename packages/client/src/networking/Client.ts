@@ -50,10 +50,10 @@ export class NetworkClient {
   private room: Room | null = null;
   private _myId: string = '';
 
-  // Live references to schema objects, tracked via onAdd/onRemove
-  private _players: Map<string, any> = new Map();
-  private _bots: Map<string, any> = new Map();
-  private _projectiles: Map<string, any> = new Map();
+  // Game state received via broadcast messages (JSON)
+  private _players: Map<string, NetworkPlayer> = new Map();
+  private _bots: Map<string, NetworkBot> = new Map();
+  private _projectiles: NetworkProjectile[] = [];
 
   onKill: KillCallback | null = null;
   onPlayerJoined: PlayerJoinCallback | null = null;
@@ -76,33 +76,27 @@ export class NetworkClient {
 
   private setupListeners(): void {
     if (!this.room) return;
-    const state = this.room.state as any;
 
-    // Track players via onAdd/onRemove (recommended Colyseus pattern)
-    state.players.onAdd((player: any, key: string) => {
-      console.log('[Network] Player added:', key, player.name);
-      this._players.set(key, player);
-    });
-    state.players.onRemove((_player: any, key: string) => {
-      console.log('[Network] Player removed:', key);
-      this._players.delete(key);
-    });
+    // Receive full game state every server tick (20Hz) via JSON broadcast
+    this.room.onMessage('gameState', (data: {
+      players: Record<string, NetworkPlayer>;
+      bots: Record<string, NetworkBot>;
+      projectiles: NetworkProjectile[];
+    }) => {
+      // Update players
+      this._players.clear();
+      for (const [key, player] of Object.entries(data.players)) {
+        this._players.set(key, player);
+      }
 
-    // Track bots
-    state.bots.onAdd((bot: any, key: string) => {
-      console.log('[Network] Bot added:', key, bot.name);
-      this._bots.set(key, bot);
-    });
-    state.bots.onRemove((_bot: any, key: string) => {
-      this._bots.delete(key);
-    });
+      // Update bots
+      this._bots.clear();
+      for (const [key, bot] of Object.entries(data.bots)) {
+        this._bots.set(key, bot);
+      }
 
-    // Track projectiles
-    state.projectiles.onAdd((proj: any, index: number) => {
-      this._projectiles.set(proj.id, proj);
-    });
-    state.projectiles.onRemove((proj: any, _index: number) => {
-      this._projectiles.delete(proj.id);
+      // Update projectiles
+      this._projectiles = data.projectiles;
     });
 
     // Message handlers
@@ -116,11 +110,6 @@ export class NetworkClient {
 
     this.room.onMessage('playerLeft', (data: { name: string }) => {
       this.onPlayerLeft?.(data.name);
-    });
-
-    // Debug: log state changes
-    this.room.onStateChange((state: any) => {
-      console.log('[Network] State changed - players:', this._players.size, 'bots:', this._bots.size, 'projectiles:', this._projectiles.size);
     });
   }
 
@@ -137,66 +126,19 @@ export class NetworkClient {
   }
 
   getPlayers(): Map<string, NetworkPlayer> {
-    const players = new Map<string, NetworkPlayer>();
-    for (const [key, player] of this._players) {
-      players.set(key, {
-        id: player.id,
-        name: player.name,
-        x: player.x,
-        y: player.y,
-        z: player.z,
-        rotY: player.rotY,
-        rotX: player.rotX,
-        health: player.health,
-        kills: player.kills,
-        deaths: player.deaths,
-        color: player.color,
-        isShooting: player.isShooting,
-        isDead: player.isDead,
-      });
-    }
-    return players;
+    return this._players;
   }
 
   getBots(): Map<string, NetworkBot> {
-    const bots = new Map<string, NetworkBot>();
-    for (const [key, bot] of this._bots) {
-      bots.set(key, {
-        id: bot.id,
-        name: bot.name,
-        x: bot.x,
-        y: bot.y,
-        z: bot.z,
-        rotY: bot.rotY,
-        health: bot.health,
-        kills: bot.kills,
-        deaths: bot.deaths,
-        color: bot.color,
-        isDead: bot.isDead,
-      });
-    }
-    return bots;
+    return this._bots;
   }
 
   getProjectiles(): NetworkProjectile[] {
-    const projectiles: NetworkProjectile[] = [];
-    for (const [, proj] of this._projectiles) {
-      projectiles.push({
-        id: proj.id,
-        x: proj.x,
-        y: proj.y,
-        z: proj.z,
-        vx: proj.vx,
-        vy: proj.vy,
-        vz: proj.vz,
-        ownerId: proj.ownerId,
-      });
-    }
-    return projectiles;
+    return this._projectiles;
   }
 
   getMyPlayer(): NetworkPlayer | null {
-    return this.getPlayers().get(this._myId) ?? null;
+    return this._players.get(this._myId) ?? null;
   }
 
   disconnect(): void {
@@ -204,6 +146,6 @@ export class NetworkClient {
     this.room = null;
     this._players.clear();
     this._bots.clear();
-    this._projectiles.clear();
+    this._projectiles = [];
   }
 }
