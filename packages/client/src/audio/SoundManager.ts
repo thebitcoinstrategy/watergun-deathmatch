@@ -225,6 +225,148 @@ export class SoundManager {
     return this.muted;
   }
 
+  // ===================== LOBBY MUSIC =====================
+
+  /** Chill, atmospheric lobby track — lo-fi vibes */
+  startLobbyMusic(): void {
+    if (this.musicPlaying) return;
+    this.musicPlaying = true;
+    this.currentMapId = '_lobby';
+    this.loopCount = 0;
+    const ctx = this.ensureContext();
+    if (!this.musicGain) {
+      this.musicGain = ctx.createGain();
+      this.musicGain.connect(ctx.destination);
+    }
+    this.musicGain.gain.setValueAtTime(0, ctx.currentTime);
+    this.musicGain.gain.linearRampToValueAtTime(
+      this.muted ? 0 : this.musicVolume,
+      ctx.currentTime + 4
+    );
+    this.scheduleMusicLoop();
+  }
+
+  private musicLobby(): void {
+    const ctx = this.ensureContext();
+    const now = ctx.currentTime;
+    const bpm = 85; const beat = 60 / bpm; const bar = beat * 4;
+    const loopDuration = bar * 8;
+
+    // Lo-fi chords — Fmaj7, Em7, Dm7, Cmaj7
+    const chordProg: { notes: number[]; time: number; dur: number }[] = [
+      { notes: [174.61, 220.00, 261.63, 329.63], time: 0, dur: bar * 2 },       // Fmaj7
+      { notes: [164.81, 196.00, 246.94, 293.66], time: bar * 2, dur: bar * 2 }, // Em7
+      { notes: [146.83, 174.61, 220.00, 261.63], time: bar * 4, dur: bar * 2 }, // Dm7
+      { notes: [130.81, 164.81, 196.00, 246.94], time: bar * 6, dur: bar * 2 }, // Cmaj7
+    ];
+
+    for (const chord of chordProg) {
+      for (const freq of chord.notes) {
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        // Gentle detuning for warmth
+        osc.detune.value = (Math.random() - 0.5) * 8;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, now + chord.time);
+        g.gain.linearRampToValueAtTime(0.07, now + chord.time + 0.8);
+        g.gain.setValueAtTime(0.07, now + chord.time + chord.dur - 0.8);
+        g.gain.linearRampToValueAtTime(0, now + chord.time + chord.dur);
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 1200;
+        osc.connect(lp);
+        lp.connect(g);
+        g.connect(this.musicGain!);
+        osc.start(now + chord.time);
+        osc.stop(now + chord.time + chord.dur + 0.1);
+        this.musicNodes.push(osc);
+      }
+    }
+
+    // Melody — dreamy, sparse, pentatonic
+    const mel: [number, number, number][] = [
+      [523.25, beat * 2, beat * 1.5],
+      [587.33, bar + beat, beat * 2],
+      [659.25, bar * 2 + beat * 2, beat * 1.5],
+      [523.25, bar * 2 + bar, beat * 2],
+      [440.00, bar * 4 + beat, beat * 2],
+      [523.25, bar * 4 + beat * 3, beat * 1.5],
+      [587.33, bar * 5 + beat * 2, beat * 2],
+      [493.88, bar * 6 + beat, beat * 1.5],
+      [440.00, bar * 6 + beat * 3, beat * 1.5],
+      [523.25, bar * 7 + beat * 2, beat * 2],
+    ];
+    for (const [f, t, d] of mel) {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, now + t);
+      g.gain.linearRampToValueAtTime(0.10, now + t + 0.15);
+      g.gain.setValueAtTime(0.10, now + t + d * 0.6);
+      g.gain.exponentialRampToValueAtTime(0.01, now + t + d);
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 2000;
+      osc.connect(lp);
+      lp.connect(g);
+      g.connect(this.musicGain!);
+      osc.start(now + t);
+      osc.stop(now + t + d + 0.1);
+      this.musicNodes.push(osc);
+    }
+
+    // Bass — gentle sine sub
+    const bassNotes: [number, number, number][] = [
+      [87.31, 0, bar * 1.8],
+      [82.41, bar * 2, bar * 1.8],
+      [73.42, bar * 4, bar * 1.8],
+      [65.41, bar * 6, bar * 1.8],
+    ];
+    for (const [f, t, d] of bassNotes) {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, now + t);
+      g.gain.linearRampToValueAtTime(0.18, now + t + 0.5);
+      g.gain.setValueAtTime(0.18, now + t + d - 0.5);
+      g.gain.linearRampToValueAtTime(0, now + t + d);
+      osc.connect(g);
+      g.connect(this.musicGain!);
+      osc.start(now + t);
+      osc.stop(now + t + d + 0.1);
+      this.musicNodes.push(osc);
+    }
+
+    // Soft hi-hat / vinyl crackle texture — very quiet
+    for (let b = 0; b < 32; b++) {
+      if (b % 2 === 0) {
+        this.playHihat(ctx, now + b * beat, 0.03);
+      }
+    }
+
+    // Gentle kick on 1 and 3 (every other bar)
+    for (let b = 0; b < 32; b += 4) {
+      if (b % 8 === 0) {
+        const osc = ctx.createOscillator();
+        osc.frequency.setValueAtTime(80, now + b * beat);
+        osc.frequency.exponentialRampToValueAtTime(30, now + b * beat + 0.2);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.15, now + b * beat);
+        g.gain.exponentialRampToValueAtTime(0.01, now + b * beat + 0.2);
+        osc.connect(g);
+        g.connect(this.musicGain!);
+        osc.start(now + b * beat);
+        osc.stop(now + b * beat + 0.25);
+        this.musicNodes.push(osc);
+      }
+    }
+
+    this.scheduleNextLoop(loopDuration);
+  }
+
   // ===================== BACKGROUND MUSIC =====================
 
   /** Start map-themed background music with fade-in */
@@ -372,6 +514,7 @@ export class SoundManager {
     this.loopCount++;
 
     switch (this.currentMapId) {
+      case '_lobby': this.musicLobby(); break;
       case 'aqua_park': this.musicAquaPark(); break;
       case 'pirate_cove': this.musicPirateCove(); break;
       case 'neon_city': this.musicNeonCity(); break;

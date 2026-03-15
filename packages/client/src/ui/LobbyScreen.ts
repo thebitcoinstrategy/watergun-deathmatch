@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { MapId } from '@watergun/shared';
 import { createBlockyCharacter, type CharacterOptions } from '../rendering/PlayerRenderer';
+import { SoundManager } from '../audio/SoundManager';
 
 export interface LobbyResult {
   mode: 'offline' | 'online';
@@ -246,6 +247,9 @@ export function setupLobby(): Promise<LobbyResult> {
       return;
     }
 
+    // Lobby music
+    const lobbySound = new SoundManager();
+
     // Normal flow
     const showLobby = () => {
       startScreen.style.display = 'none';
@@ -258,6 +262,9 @@ export function setupLobby(): Promise<LobbyResult> {
         preview = new CharacterPreview(previewCanvas);
         updatePreview();
       }
+
+      // Start lobby music
+      lobbySound.startLobbyMusic();
     };
 
     startScreen.addEventListener('click', showLobby);
@@ -281,6 +288,7 @@ export function setupLobby(): Promise<LobbyResult> {
       localStorage.setItem('watergun_sunglasses', String(sunglasses));
 
       lobby.style.display = 'none';
+      lobbySound.stopMusic();
       if (preview) preview.destroy();
       resolve({ mode, name, roomCode, color, pantsColor, hat, sunglasses, numBots, mapId });
     };
