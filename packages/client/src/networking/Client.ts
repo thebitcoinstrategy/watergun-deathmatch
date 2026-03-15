@@ -50,6 +50,11 @@ export class NetworkClient {
   private room: Room | null = null;
   private _myId: string = '';
 
+  // Live references to schema objects, tracked via onAdd/onRemove
+  private _players: Map<string, any> = new Map();
+  private _bots: Map<string, any> = new Map();
+  private _projectiles: Map<string, any> = new Map();
+
   onKill: KillCallback | null = null;
   onPlayerJoined: PlayerJoinCallback | null = null;
   onPlayerLeft: PlayerLeaveCallback | null = null;
@@ -71,7 +76,36 @@ export class NetworkClient {
 
   private setupListeners(): void {
     if (!this.room) return;
+    const state = this.room.state as any;
 
+    // Track players via onAdd/onRemove (recommended Colyseus pattern)
+    state.players.onAdd((player: any, key: string) => {
+      console.log('[Network] Player added:', key, player.name);
+      this._players.set(key, player);
+    });
+    state.players.onRemove((_player: any, key: string) => {
+      console.log('[Network] Player removed:', key);
+      this._players.delete(key);
+    });
+
+    // Track bots
+    state.bots.onAdd((bot: any, key: string) => {
+      console.log('[Network] Bot added:', key, bot.name);
+      this._bots.set(key, bot);
+    });
+    state.bots.onRemove((_bot: any, key: string) => {
+      this._bots.delete(key);
+    });
+
+    // Track projectiles
+    state.projectiles.onAdd((proj: any, index: number) => {
+      this._projectiles.set(proj.id, proj);
+    });
+    state.projectiles.onRemove((proj: any, _index: number) => {
+      this._projectiles.delete(proj.id);
+    });
+
+    // Message handlers
     this.room.onMessage('kill', (data: { killer: string; victim: string; victimName: string }) => {
       this.onKill?.(data.killer, data.victim, data.victimName);
     });
@@ -82,6 +116,11 @@ export class NetworkClient {
 
     this.room.onMessage('playerLeft', (data: { name: string }) => {
       this.onPlayerLeft?.(data.name);
+    });
+
+    // Debug: log state changes
+    this.room.onStateChange((state: any) => {
+      console.log('[Network] State changed - players:', this._players.size, 'bots:', this._bots.size, 'projectiles:', this._projectiles.size);
     });
   }
 
@@ -99,9 +138,7 @@ export class NetworkClient {
 
   getPlayers(): Map<string, NetworkPlayer> {
     const players = new Map<string, NetworkPlayer>();
-    if (!this.room) return players;
-
-    this.room.state.players.forEach((player: any, key: string) => {
+    for (const [key, player] of this._players) {
       players.set(key, {
         id: player.id,
         name: player.name,
@@ -117,16 +154,13 @@ export class NetworkClient {
         isShooting: player.isShooting,
         isDead: player.isDead,
       });
-    });
-
+    }
     return players;
   }
 
   getBots(): Map<string, NetworkBot> {
     const bots = new Map<string, NetworkBot>();
-    if (!this.room) return bots;
-
-    this.room.state.bots.forEach((bot: any, key: string) => {
+    for (const [key, bot] of this._bots) {
       bots.set(key, {
         id: bot.id,
         name: bot.name,
@@ -140,16 +174,13 @@ export class NetworkClient {
         color: bot.color,
         isDead: bot.isDead,
       });
-    });
-
+    }
     return bots;
   }
 
   getProjectiles(): NetworkProjectile[] {
-    if (!this.room) return [];
-
     const projectiles: NetworkProjectile[] = [];
-    this.room.state.projectiles.forEach((proj: any) => {
+    for (const [, proj] of this._projectiles) {
       projectiles.push({
         id: proj.id,
         x: proj.x,
@@ -160,8 +191,7 @@ export class NetworkClient {
         vz: proj.vz,
         ownerId: proj.ownerId,
       });
-    });
-
+    }
     return projectiles;
   }
 
@@ -172,5 +202,8 @@ export class NetworkClient {
   disconnect(): void {
     this.room?.leave();
     this.room = null;
+    this._players.clear();
+    this._bots.clear();
+    this._projectiles.clear();
   }
 }

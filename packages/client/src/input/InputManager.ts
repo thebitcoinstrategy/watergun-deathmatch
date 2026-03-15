@@ -4,6 +4,7 @@ export class InputManager {
   private keys: Set<string> = new Set();
   private mouseDown = false;
   private mouseClicked = false;
+  private touchShootClicked = false;
   private mouseDx = 0;
   private mouseDy = 0;
   private pointerLocked = false;
@@ -183,18 +184,16 @@ export class InputManager {
     fireBtn.addEventListener('touchstart', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.touchShootBtn = true;
+      this.touchShootClicked = true;
       fireBtn.classList.add('active');
     }, { passive: false });
     fireBtn.addEventListener('touchend', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      this.touchShootBtn = false;
       fireBtn.classList.remove('active');
     }, { passive: false });
     fireBtn.addEventListener('touchcancel', (e) => {
       e.preventDefault();
-      this.touchShootBtn = false;
       fireBtn.classList.remove('active');
     }, { passive: false });
 
@@ -286,7 +285,11 @@ export class InputManager {
 
   isShooting(): boolean {
     if (this.isTouchDevice) {
-      return this.touchShootBtn;
+      if (this.touchShootClicked) {
+        this.touchShootClicked = false;
+        return true;
+      }
+      return false;
     }
     if (this.mouseClicked) {
       this.mouseClicked = false;
