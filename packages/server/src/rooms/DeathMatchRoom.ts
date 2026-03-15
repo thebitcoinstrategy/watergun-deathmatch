@@ -326,6 +326,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         rotY: p.rotY, rotX: p.rotX, health: p.health,
         kills: p.kills, deaths: p.deaths, color: p.color,
         isShooting: p.isShooting, isDead: p.isDead,
+        spawnProtection: p.spawnProtection,
       };
     });
 

@@ -14,6 +14,7 @@ export interface NetworkPlayer {
   color: string;
   isShooting: boolean;
   isDead: boolean;
+  spawnProtection: number;
 }
 
 export interface NetworkBot {
