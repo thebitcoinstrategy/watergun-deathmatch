@@ -110,7 +110,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     this.edgeSpawns = MAPS[this.mapId].spawns;
     console.log(`[Room ${this.roomId}] Created with roomCode="${options.roomCode || '1'}", numBots=${numBots}, map=${this.mapId}`);
 
-    this.setMetadata({ roomCode: options.roomCode || '1' });
+    this.setMetadata({ roomCode: options.roomCode || '1', mapId: this.mapId });
 
     // Spawn bots
     for (let i = 0; i < numBots; i++) {
@@ -279,19 +279,14 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     const dt = (now - this.lastTickTime) / 1000;
     this.lastTickTime = now;
 
-    // Player movement is now driven by client position sync (sent with input)
-    // Only handle gravity, jumping, and bounds on server as fallback
+    // Player movement is fully client-authoritative (client sends px/py/pz).
+    // Server only syncs rotation from input.
     this.state.players.forEach((player) => {
       const input = this.playerInputs.get(player.id);
       if (!input || player.isDead) return;
 
       player.rotY = input.rotY;
       player.rotX = input.rotX;
-
-      if (input.jump && player.isGrounded) {
-        player.velocityY = JUMP_FORCE;
-        player.isGrounded = false;
-      }
     });
 
     // Update players (gravity, bounds, respawn)
@@ -320,13 +315,17 @@ export class DeathMatchRoom extends Room<GameRoomState> {
         player.speedBoostCooldown = Math.max(0, player.speedBoostCooldown - dt);
       }
 
-      // Gravity
-      player.velocityY += GRAVITY * dt;
-      player.y += player.velocityY * dt;
-      if (player.y <= 0) {
-        player.y = 0;
-        player.velocityY = 0;
-        player.isGrounded = true;
+      // Gravity — only as fallback if client hasn't sent position recently
+      // Client is authoritative for Y (handles terrain, pools, slides, collision)
+      // so we skip server gravity when we have recent client input
+      if (!this.playerInputs.has(player.id)) {
+        player.velocityY += GRAVITY * dt;
+        player.y += player.velocityY * dt;
+        if (player.y <= 0) {
+          player.y = 0;
+          player.velocityY = 0;
+          player.isGrounded = true;
+        }
       }
 
       // Bounds

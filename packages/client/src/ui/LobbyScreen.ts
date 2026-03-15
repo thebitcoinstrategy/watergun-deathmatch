@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { MapId } from '@watergun/shared';
+import { MAPS, type MapId } from '@watergun/shared';
 import { createBlockyCharacter, type CharacterOptions } from '../rendering/PlayerRenderer';
 import { SoundManager } from '../audio/SoundManager';
 
@@ -241,6 +241,74 @@ export function setupLobby(): Promise<LobbyResult> {
       lobby.style.display = 'flex';
       fullLobby.style.display = 'block';
       joinOnly.style.display = 'none';
+
+      // Hide room settings that are controlled by the room creator
+      const mapCol = document.querySelector('.lobby-col-right') as HTMLElement;
+      // Hide room code, bot count, and Solo button — only show Multiplayer (join)
+      const roomField = roomInput?.closest('.lobby-field') as HTMLElement;
+      if (roomField) roomField.style.display = 'none';
+      const botField = document.getElementById('bot-count')?.closest('.lobby-field') as HTMLElement;
+      if (botField) botField.style.display = 'none';
+      const soloBtn = document.getElementById('btn-offline') as HTMLElement;
+      if (soloBtn) soloBtn.style.display = 'none';
+      // Rename multiplayer button to "Join Game"
+      const mpBtn = document.getElementById('btn-online') as HTMLElement;
+      if (mpBtn) mpBtn.textContent = 'Join Game';
+
+      // Fetch room info from server to show which map is being played
+      const httpProto = window.location.protocol;
+      const isDev = !!window.location.port && window.location.port !== '2567' && window.location.port !== '80' && window.location.port !== '443';
+      const apiBase = import.meta.env.VITE_SERVER_URL
+        ? import.meta.env.VITE_SERVER_URL.replace(/^wss?:/, httpProto)
+        : isDev
+          ? `${httpProto}//${window.location.hostname}:2567`
+          : `${httpProto}//${window.location.host}`;
+
+      // Show map column with "loading" state, then update with actual map
+      if (mapCol) {
+        mapCol.innerHTML = `
+          <div class="lobby-field">
+            <label>Room Map</label>
+            <div style="padding:12px;text-align:center;color:#aaa;">Loading room info...</div>
+          </div>`;
+      }
+
+      fetch(`${apiBase}/api/room-info/${encodeURIComponent(roomFromUrl)}`)
+        .then((r) => r.json())
+        .then((info: { exists: boolean; mapId?: string; players?: number }) => {
+          if (mapCol) {
+            if (info.exists && info.mapId) {
+              const mapDef = MAPS[info.mapId as MapId];
+              const mapName = mapDef ? mapDef.name : info.mapId;
+              mapCol.innerHTML = `
+                <div class="lobby-field">
+                  <label>Room Map</label>
+                  <div class="join-room-info">
+                    <div class="join-room-map">${mapName}</div>
+                    <div class="join-room-detail">Room: ${roomFromUrl} &bull; ${info.players || 0} player(s) in game</div>
+                  </div>
+                </div>`;
+            } else {
+              mapCol.innerHTML = `
+                <div class="lobby-field">
+                  <label>Room Info</label>
+                  <div class="join-room-info">
+                    <div class="join-room-map">New Room</div>
+                    <div class="join-room-detail">Room "${roomFromUrl}" doesn't exist yet — you'll create it</div>
+                  </div>
+                </div>`;
+            }
+          }
+        })
+        .catch(() => {
+          if (mapCol) {
+            mapCol.innerHTML = `
+              <div class="lobby-field">
+                <label>Room Info</label>
+                <div style="padding:12px;text-align:center;color:#aaa;">Could not fetch room info</div>
+              </div>`;
+          }
+        });
 
       // Start 3D preview
       if (!preview && previewCanvas) {

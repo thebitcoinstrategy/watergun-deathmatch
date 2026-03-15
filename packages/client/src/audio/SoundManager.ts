@@ -249,119 +249,173 @@ export class SoundManager {
   private musicLobby(): void {
     const ctx = this.ensureContext();
     const now = ctx.currentTime;
-    const bpm = 85; const beat = 60 / bpm; const bar = beat * 4;
+    const bpm = 140; const beat = 60 / bpm; const bar = beat * 4;
     const loopDuration = bar * 8;
 
-    // Lo-fi chords — Fmaj7, Em7, Dm7, Cmaj7
-    const chordProg: { notes: number[]; time: number; dur: number }[] = [
-      { notes: [174.61, 220.00, 261.63, 329.63], time: 0, dur: bar * 2 },       // Fmaj7
-      { notes: [164.81, 196.00, 246.94, 293.66], time: bar * 2, dur: bar * 2 }, // Em7
-      { notes: [146.83, 174.61, 220.00, 261.63], time: bar * 4, dur: bar * 2 }, // Dm7
-      { notes: [130.81, 164.81, 196.00, 246.94], time: bar * 6, dur: bar * 2 }, // Cmaj7
-    ];
+    // === PUNCHY DRUMS — four-on-the-floor kick with offbeat hats and snare ===
+    for (let b = 0; b < 32; b++) {
+      const t = now + b * beat;
+      // Kick on every beat
+      this.playKick(ctx, t, 0.22);
+      // Hi-hat on every 8th note (between beats too)
+      this.playHihat(ctx, t, 0.06);
+      this.playHihat(ctx, t + beat * 0.5, 0.04);
+      // Snare on 2 and 4
+      if (b % 4 === 1 || b % 4 === 3) {
+        this.playSnare(ctx, t, 0.14, 1200);
+      }
+      // Extra open hat on the "and" of beat 4 every other bar
+      if (b % 8 === 7) {
+        this.playHihat(ctx, t + beat * 0.5, 0.08);
+      }
+    }
 
-    for (const chord of chordProg) {
-      for (const freq of chord.notes) {
+    // === BOUNCY BASS — syncopated sawtooth bass with filter ===
+    const bassPattern: [number, number, number][] = [
+      // [freq, time in beats, duration in beats]
+      [130.81, 0, 0.5],     [130.81, 1, 0.25],   [130.81, 1.75, 0.25],
+      [146.83, 2, 0.5],     [146.83, 3, 0.25],   [130.81, 3.5, 0.5],
+      [164.81, 4, 0.5],     [164.81, 5, 0.25],   [164.81, 5.75, 0.25],
+      [146.83, 6, 0.5],     [130.81, 7, 0.5],     [146.83, 7.5, 0.25],
+    ];
+    for (let section = 0; section < 4; section++) {
+      const offset = section * bar * 2;
+      for (const [freq, beatPos, dur] of bassPattern) {
+        const t = offset + beatPos * beat;
+        const d = dur * beat;
         const osc = ctx.createOscillator();
-        osc.type = 'sine';
+        osc.type = 'sawtooth';
         osc.frequency.value = freq;
-        // Gentle detuning for warmth
-        osc.detune.value = (Math.random() - 0.5) * 8;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0, now + chord.time);
-        g.gain.linearRampToValueAtTime(0.07, now + chord.time + 0.8);
-        g.gain.setValueAtTime(0.07, now + chord.time + chord.dur - 0.8);
-        g.gain.linearRampToValueAtTime(0, now + chord.time + chord.dur);
         const lp = ctx.createBiquadFilter();
         lp.type = 'lowpass';
-        lp.frequency.value = 1200;
+        lp.frequency.setValueAtTime(800, now + t);
+        lp.frequency.exponentialRampToValueAtTime(300, now + t + d);
+        lp.Q.value = 4;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.16, now + t);
+        g.gain.setValueAtTime(0.16, now + t + d * 0.6);
+        g.gain.exponentialRampToValueAtTime(0.01, now + t + d);
         osc.connect(lp);
         lp.connect(g);
         g.connect(this.musicGain!);
-        osc.start(now + chord.time);
-        osc.stop(now + chord.time + chord.dur + 0.1);
+        osc.start(now + t);
+        osc.stop(now + t + d + 0.05);
         this.musicNodes.push(osc);
       }
     }
 
-    // Melody — dreamy, sparse, pentatonic
-    const mel: [number, number, number][] = [
-      [523.25, beat * 2, beat * 1.5],
-      [587.33, bar + beat, beat * 2],
-      [659.25, bar * 2 + beat * 2, beat * 1.5],
-      [523.25, bar * 2 + bar, beat * 2],
-      [440.00, bar * 4 + beat, beat * 2],
-      [523.25, bar * 4 + beat * 3, beat * 1.5],
-      [587.33, bar * 5 + beat * 2, beat * 2],
-      [493.88, bar * 6 + beat, beat * 1.5],
-      [440.00, bar * 6 + beat * 3, beat * 1.5],
-      [523.25, bar * 7 + beat * 2, beat * 2],
+    // === BRIGHT LEAD MELODY — catchy, major key, upbeat ===
+    // C major pentatonic riffs
+    const melody: [number, number, number][] = [
+      // Phrase 1 — ascending energy
+      [523.25, 0.5, 0.5],   [587.33, 1, 0.25],   [659.25, 1.25, 0.5],
+      [783.99, 2, 0.75],    [659.25, 3, 0.25],    [783.99, 3.5, 0.5],
+      // Phrase 2 — call and response
+      [880.00, 4.5, 0.5],   [783.99, 5, 0.25],    [659.25, 5.25, 0.5],
+      [587.33, 6, 0.75],    [523.25, 7, 0.25],    [659.25, 7.25, 0.75],
+      // Phrase 3 — high energy climax
+      [783.99, 8.5, 0.25],  [880.00, 8.75, 0.25], [1046.50, 9, 0.75],
+      [880.00, 10, 0.5],    [783.99, 10.5, 0.25], [659.25, 11, 0.75],
+      // Phrase 4 — resolution with bounce
+      [523.25, 12, 0.25],   [659.25, 12.5, 0.25], [783.99, 13, 0.5],
+      [880.00, 13.5, 0.25], [783.99, 14, 0.5],    [659.25, 14.5, 0.25],
+      [523.25, 15, 1],
+      // Phrase 5 — second half variation
+      [659.25, 16.5, 0.5],  [783.99, 17, 0.25],   [880.00, 17.25, 0.5],
+      [1046.50, 18, 0.5],   [880.00, 18.5, 0.5],  [783.99, 19, 0.25],
+      [659.25, 19.25, 0.75],
+      // Phrase 6 — playful descending run
+      [1046.50, 20, 0.25],  [880.00, 20.25, 0.25],[783.99, 20.5, 0.25],
+      [659.25, 20.75, 0.25],[587.33, 21, 0.25],   [523.25, 21.25, 0.75],
+      [659.25, 22, 0.5],    [783.99, 22.5, 0.5],
+      // Phrase 7 — build up ending
+      [523.25, 24, 0.25],   [587.33, 24.25, 0.25],[659.25, 24.5, 0.25],
+      [783.99, 24.75, 0.25],[880.00, 25, 0.25],   [1046.50, 25.25, 0.75],
+      [880.00, 26, 0.5],    [1046.50, 26.5, 0.25],[880.00, 27, 0.75],
+      // Final phrase — landing
+      [783.99, 28, 0.5],    [659.25, 28.5, 0.5],  [523.25, 29, 0.5],
+      [659.25, 29.5, 0.5],  [523.25, 30, 1.5],
     ];
-    for (const [f, t, d] of mel) {
-      const osc = ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.value = f;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0, now + t);
-      g.gain.linearRampToValueAtTime(0.10, now + t + 0.15);
-      g.gain.setValueAtTime(0.10, now + t + d * 0.6);
-      g.gain.exponentialRampToValueAtTime(0.01, now + t + d);
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass';
-      lp.frequency.value = 2000;
-      osc.connect(lp);
-      lp.connect(g);
-      g.connect(this.musicGain!);
-      osc.start(now + t);
-      osc.stop(now + t + d + 0.1);
-      this.musicNodes.push(osc);
+
+    for (const [freq, beatPos, dur] of melody) {
+      const t = beatPos * beat;
+      const d = dur * beat;
+      // Square wave lead with slight detune for thickness
+      for (const detune of [-6, 6]) {
+        const osc = ctx.createOscillator();
+        osc.type = 'square';
+        osc.frequency.value = freq;
+        osc.detune.value = detune;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.frequency.value = 3500;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, now + t);
+        g.gain.linearRampToValueAtTime(0.06, now + t + 0.02);
+        g.gain.setValueAtTime(0.06, now + t + d * 0.7);
+        g.gain.exponentialRampToValueAtTime(0.01, now + t + d);
+        osc.connect(lp);
+        lp.connect(g);
+        g.connect(this.musicGain!);
+        osc.start(now + t);
+        osc.stop(now + t + d + 0.05);
+        this.musicNodes.push(osc);
+      }
     }
 
-    // Bass — gentle sine sub
-    const bassNotes: [number, number, number][] = [
-      [87.31, 0, bar * 1.8],
-      [82.41, bar * 2, bar * 1.8],
-      [73.42, bar * 4, bar * 1.8],
-      [65.41, bar * 6, bar * 1.8],
+    // === BRIGHT CHORD STABS — major chords on offbeats for energy ===
+    const chords: { notes: number[]; time: number; dur: number }[] = [
+      { notes: [261.63, 329.63, 392.00], time: 0.5, dur: 0.3 },   // C major
+      { notes: [261.63, 329.63, 392.00], time: 2.5, dur: 0.3 },
+      { notes: [293.66, 369.99, 440.00], time: 4.5, dur: 0.3 },   // D major
+      { notes: [293.66, 369.99, 440.00], time: 6.5, dur: 0.3 },
+      { notes: [329.63, 415.30, 493.88], time: 8.5, dur: 0.3 },   // E major
+      { notes: [329.63, 415.30, 493.88], time: 10.5, dur: 0.3 },
+      { notes: [349.23, 440.00, 523.25], time: 12.5, dur: 0.3 },  // F major
+      { notes: [261.63, 329.63, 392.00], time: 14.5, dur: 0.3 },  // C major
     ];
-    for (const [f, t, d] of bassNotes) {
+    for (let rep = 0; rep < 2; rep++) {
+      const repOffset = rep * bar * 4;
+      for (const chord of chords) {
+        for (const freq of chord.notes) {
+          const t = repOffset + chord.time * beat;
+          const d = chord.dur * beat;
+          const osc = ctx.createOscillator();
+          osc.type = 'sawtooth';
+          osc.frequency.value = freq;
+          const lp = ctx.createBiquadFilter();
+          lp.type = 'lowpass';
+          lp.frequency.value = 2500;
+          const g = ctx.createGain();
+          g.gain.setValueAtTime(0.05, now + t);
+          g.gain.exponentialRampToValueAtTime(0.01, now + t + d);
+          osc.connect(lp);
+          lp.connect(g);
+          g.connect(this.musicGain!);
+          osc.start(now + t);
+          osc.stop(now + t + d + 0.05);
+          this.musicNodes.push(osc);
+        }
+      }
+    }
+
+    // === ARPEGGIATED SYNTH — bubbly background texture ===
+    const arpNotes = [523.25, 659.25, 783.99, 1046.50, 783.99, 659.25];
+    for (let i = 0; i < 32; i++) {
+      const note = arpNotes[i % arpNotes.length];
+      const t = (i * 0.5 + 16) * beat; // starts in second half
+      if (t >= loopDuration) break;
       const osc = ctx.createOscillator();
-      osc.type = 'sine';
-      osc.frequency.value = f;
+      osc.type = 'triangle';
+      osc.frequency.value = note;
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0, now + t);
-      g.gain.linearRampToValueAtTime(0.18, now + t + 0.5);
-      g.gain.setValueAtTime(0.18, now + t + d - 0.5);
-      g.gain.linearRampToValueAtTime(0, now + t + d);
+      g.gain.setValueAtTime(0.04, now + t);
+      g.gain.exponentialRampToValueAtTime(0.01, now + t + beat * 0.4);
       osc.connect(g);
       g.connect(this.musicGain!);
       osc.start(now + t);
-      osc.stop(now + t + d + 0.1);
+      osc.stop(now + t + beat * 0.45);
       this.musicNodes.push(osc);
-    }
-
-    // Soft hi-hat / vinyl crackle texture — very quiet
-    for (let b = 0; b < 32; b++) {
-      if (b % 2 === 0) {
-        this.playHihat(ctx, now + b * beat, 0.03);
-      }
-    }
-
-    // Gentle kick on 1 and 3 (every other bar)
-    for (let b = 0; b < 32; b += 4) {
-      if (b % 8 === 0) {
-        const osc = ctx.createOscillator();
-        osc.frequency.setValueAtTime(80, now + b * beat);
-        osc.frequency.exponentialRampToValueAtTime(30, now + b * beat + 0.2);
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.15, now + b * beat);
-        g.gain.exponentialRampToValueAtTime(0.01, now + b * beat + 0.2);
-        osc.connect(g);
-        g.connect(this.musicGain!);
-        osc.start(now + b * beat);
-        osc.stop(now + b * beat + 0.25);
-        this.musicNodes.push(osc);
-      }
     }
 
     this.scheduleNextLoop(loopDuration);

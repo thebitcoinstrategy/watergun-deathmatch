@@ -1,4 +1,4 @@
-import { Server } from 'colyseus';
+import { Server, matchMaker } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { createServer } from 'http';
 import express from 'express';
@@ -8,6 +8,21 @@ import { DeathMatchRoom } from './rooms/DeathMatchRoom';
 
 const app = express();
 app.use(cors());
+
+// API: query room info by roomCode (used by lobby to show map before joining)
+app.get('/api/room-info/:roomCode', async (req, res) => {
+  try {
+    const rooms = await matchMaker.query({ name: 'deathmatch' });
+    const match = rooms.find((r: any) => r.metadata?.roomCode === req.params.roomCode);
+    if (match) {
+      res.json({ exists: true, mapId: match.metadata?.mapId || 'aqua_park', players: match.clients });
+    } else {
+      res.json({ exists: false });
+    }
+  } catch {
+    res.json({ exists: false });
+  }
+});
 
 // Serve built client files in production
 const clientDist = path.resolve(__dirname, '../../client/dist');

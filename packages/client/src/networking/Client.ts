@@ -95,6 +95,7 @@ export class NetworkClient {
   }
 
   private _serverMapId: string = '';
+  private _roomInfoResolve: ((data: { mapId: string }) => void) | null = null;
 
   get myId(): string { return this._myId; }
   get connected(): boolean { return this.room !== null; }
@@ -102,18 +103,26 @@ export class NetworkClient {
   get serverMapId(): string { return this._serverMapId; }
 
   async joinOrCreate(roomCode: string, name: string, color?: string, numBots?: number, mapId?: string, pantsColor?: string, hat?: string, sunglasses?: boolean): Promise<string> {
-    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color, numBots, mapId, pantsColor, hat, sunglasses });
-    this._myId = this.room.sessionId;
-
-    // Wait for server to tell us which map the room is using before setting up other listeners
-    await new Promise<void>((resolve) => {
+    // Set up roomInfo promise BEFORE joinOrCreate so we don't miss the message
+    const roomInfoPromise = new Promise<void>((resolve) => {
       const timeout = setTimeout(() => resolve(), 2000);
-      this.room!.onMessage('roomInfo', (data: { mapId: string }) => {
+      this._roomInfoResolve = (data: { mapId: string }) => {
         this._serverMapId = data.mapId;
         clearTimeout(timeout);
         resolve();
-      });
+      };
     });
+
+    this.room = await this.client.joinOrCreate('deathmatch', { roomCode, name, color, numBots, mapId, pantsColor, hat, sunglasses });
+    this._myId = this.room.sessionId;
+
+    // Register the roomInfo listener immediately after room is available
+    this.room.onMessage('roomInfo', (data: { mapId: string }) => {
+      this._roomInfoResolve?.(data);
+    });
+
+    // Wait for server to tell us which map the room is using
+    await roomInfoPromise;
 
     this.setupListeners();
     return roomCode;

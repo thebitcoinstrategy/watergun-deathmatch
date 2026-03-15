@@ -7,7 +7,7 @@ const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
 // Auto-detect server URL: in production (same origin), use page host; in dev, use port 2567
 const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-const isDev = window.location.port === '3000' || window.location.port === '5173';
+const isDev = !!window.location.port && window.location.port !== '2567' && window.location.port !== '80' && window.location.port !== '443';
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || (isDev
   ? `${wsProtocol}//${window.location.hostname}:2567`
   : `${wsProtocol}//${window.location.host}`);
