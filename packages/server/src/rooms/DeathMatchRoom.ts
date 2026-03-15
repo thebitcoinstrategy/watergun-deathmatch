@@ -8,7 +8,7 @@ const JUMP_FORCE = 8;
 const MAX_HEALTH = 100;
 const WATER_DAMAGE = 10;
 const WATER_SPEED = 30;
-const NUM_BOTS = 2;
+const NUM_BOTS = 1;
 
 const PLAYER_COLORS = ['#4fc3f7', '#f44336', '#e91e63', '#9c27b0', '#ff9800', '#ffeb3b', '#8bc34a', '#00bcd4'];
 const BOT_COLORS = ['#f44336', '#e91e63', '#9c27b0', '#ff9800', '#ffeb3b', '#8bc34a'];

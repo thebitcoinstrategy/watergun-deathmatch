@@ -789,6 +789,32 @@ export class Game {
 
     document.getElementById('pool-indicator')!.style.display = this.isInPool ? 'block' : 'none';
     document.getElementById('slide-indicator')!.style.display = this.isOnSlide ? 'block' : 'none';
+
+    // Player list
+    const playerListEl = document.getElementById('player-list')!;
+    if (this.isOnline && this.networkClient) {
+      const players = this.networkClient.getPlayers();
+      const bots = this.networkClient.getBots();
+      let html = `<div class="pl-title">Players (${players.size + bots.size})</div>`;
+      players.forEach((p) => {
+        const isMe = p.id === this.networkClient!.myId;
+        const color = isMe ? '#4fc3f7' : '#fff';
+        html += `<div class="pl-entry" style="color:${color}">${p.name}${isMe ? ' (You)' : ''} - ${p.kills}K</div>`;
+      });
+      bots.forEach((b) => {
+        html += `<div class="pl-entry" style="color:#aaa">${b.name} [Bot] - ${b.kills}K</div>`;
+      });
+      playerListEl.innerHTML = html;
+      playerListEl.style.display = 'block';
+    } else if (!this.isOnline) {
+      let html = `<div class="pl-title">Players (${1 + this.bots.length})</div>`;
+      html += `<div class="pl-entry" style="color:#4fc3f7">${this.playerName} (You) - ${this.playerKills}K</div>`;
+      for (const b of this.bots) {
+        html += `<div class="pl-entry" style="color:#aaa">${b.name} [Bot] - ${b.kills}K</div>`;
+      }
+      playerListEl.innerHTML = html;
+      playerListEl.style.display = 'block';
+    }
   }
 
   private render(): void {

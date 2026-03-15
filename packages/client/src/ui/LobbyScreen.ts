@@ -4,8 +4,17 @@ export interface LobbyResult {
   roomCode: string;
 }
 
+declare const __BUILD_TIME__: string;
+
 export function setupLobby(): Promise<LobbyResult> {
   return new Promise((resolve) => {
+    // Show build version
+    const buildEl = document.getElementById('build-version');
+    if (buildEl) {
+      const buildDate = new Date(__BUILD_TIME__);
+      const formatted = buildDate.toLocaleString();
+      buildEl.textContent = `Build: ${formatted}`;
+    }
     const lobby = document.getElementById('lobby-screen')!;
     const startScreen = document.getElementById('start-screen')!;
     const fullLobby = document.getElementById('full-lobby')!;

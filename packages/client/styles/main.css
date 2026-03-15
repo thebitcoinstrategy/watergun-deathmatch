@@ -711,3 +711,38 @@ body {
 #btn-back-lobby:hover {
   background: rgba(255,255,255,0.3);
 }
+
+/* === BUILD VERSION === */
+#build-version {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 11px;
+  margin-top: -20px;
+  margin-bottom: 20px;
+}
+
+/* === PLAYER LIST (in-game) === */
+#player-list {
+  position: absolute;
+  bottom: 90px;
+  right: 10px;
+  color: white;
+  font-size: 12px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 6px 10px;
+  border-radius: 5px;
+  max-width: 180px;
+}
+
+#player-list .pl-title {
+  font-weight: bold;
+  font-size: 11px;
+  color: #90caf9;
+  margin-bottom: 3px;
+}
+
+#player-list .pl-entry {
+  padding: 1px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
