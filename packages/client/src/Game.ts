@@ -706,7 +706,9 @@ export class Game {
   private updateNetworkProjectiles(): void {
     if (!this.networkClient) return;
     const projectiles = this.networkClient.getProjectiles();
-    const currentIds = new Set(projectiles.map(p => p.id));
+    // Skip our own projectiles — we already render them locally via WaterEffect
+    const remoteProjectiles = projectiles.filter(p => p.ownerId !== this.networkClient!.myId);
+    const currentIds = new Set(remoteProjectiles.map(p => p.id));
 
     // Remove stale
     for (const [id, mesh] of this.networkProjectileMeshes) {
@@ -719,16 +721,19 @@ export class Game {
     }
 
     // Update or create
-    for (const proj of projectiles) {
+    for (const proj of remoteProjectiles) {
       let mesh = this.networkProjectileMeshes.get(proj.id);
       if (!mesh) {
+        // Look up weapon visuals for this projectile
+        const wpnId = (proj.weaponId || 'water_pistol') as WeaponId;
+        const wpn = WEAPONS[wpnId] || WEAPONS.water_pistol;
         mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.1, 8, 8),
+          new THREE.SphereGeometry(wpn.projectileRadius, 8, 8),
           new THREE.MeshStandardMaterial({
-            color: '#29b6f6',
+            color: wpn.projectileColor,
             transparent: true,
             opacity: 0.85,
-            emissive: '#0288d1',
+            emissive: wpn.emissiveColor,
             emissiveIntensity: 0.3,
           })
         );

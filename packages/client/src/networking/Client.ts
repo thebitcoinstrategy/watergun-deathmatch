@@ -55,6 +55,7 @@ export interface NetworkProjectile {
   vy: number;
   vz: number;
   ownerId: string;
+  weaponId?: string;
 }
 
 export type KillCallback = (killer: string, victim: string, victimName: string) => void;

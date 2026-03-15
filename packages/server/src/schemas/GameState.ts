@@ -24,6 +24,7 @@ export class PlayerSchema extends Schema {
   isGrounded: boolean = true;
   respawnTimer: number = 0;
   lastShootTime: number = 0;
+  lastProjectileTime: number = 0;
   speedBoostCooldown: number = 0;
 }
 
@@ -36,8 +37,11 @@ export class ProjectileSchema extends Schema {
   @type('number') vy: number = 0;
   @type('number') vz: number = 0;
   @type('string') ownerId: string = '';
+  @type('string') weaponId: string = 'water_pistol';
 
   age: number = 0;
+  maxAge: number = 2;
+  gravity: number = 9.8;
 }
 
 export class BotSchema extends Schema {

@@ -161,6 +161,8 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       // Track shooting state for animation broadcast (blocked during spawn protection)
       if (input.shoot && player.spawnProtection <= 0) {
         player.isShooting = true;
+        // Create projectiles for other players to see
+        this.playerShoot(player);
       } else {
         player.isShooting = false;
       }
@@ -365,10 +367,10 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       proj.x += proj.vx * dt;
       proj.y += proj.vy * dt;
       proj.z += proj.vz * dt;
-      proj.vy -= 9.8 * dt;
+      proj.vy -= proj.gravity * dt;
 
       // Remove if hit ground or expired
-      if (proj.y <= 0 || proj.age >= 2) {
+      if (proj.y <= 0 || proj.age >= proj.maxAge) {
         this.state.projectiles.splice(i, 1);
         continue;
       }
@@ -438,7 +440,7 @@ export class DeathMatchRoom extends Room<GameRoomState> {
       if (!pr) continue;
       projectilesData.push({
         id: pr.id, x: pr.x, y: pr.y, z: pr.z,
-        vx: pr.vx, vy: pr.vy, vz: pr.vz, ownerId: pr.ownerId,
+        vx: pr.vx, vy: pr.vy, vz: pr.vz, ownerId: pr.ownerId, weaponId: pr.weaponId,
       });
     }
 
@@ -584,6 +586,56 @@ export class DeathMatchRoom extends Room<GameRoomState> {
     proj.vz = ((dz / dist) + (Math.random() - 0.5) * inaccuracy) * 25;
 
     this.state.projectiles.push(proj);
+  }
+
+  private playerShoot(player: PlayerSchema) {
+    const now = Date.now();
+    const weaponDef = WEAPONS[(player.weapon || 'water_pistol') as WeaponId] || WEAPONS.water_pistol;
+    const minInterval = (1000 / weaponDef.fireRate) * 0.85; // slight tolerance
+    if (now - player.lastProjectileTime < minInterval) return;
+    player.lastProjectileTime = now;
+
+    // Direction from player rotation
+    const dirX = -Math.sin(player.rotY) * Math.cos(player.rotX);
+    const dirY = Math.sin(player.rotX);
+    const dirZ = -Math.cos(player.rotY) * Math.cos(player.rotX);
+
+    // Nozzle origin offset
+    const rightX = -Math.cos(player.rotY);
+    const rightZ = Math.sin(player.rotY);
+    const fwdX = Math.sin(player.rotY);
+    const fwdZ = Math.cos(player.rotY);
+
+    const originX = player.x + rightX * 0.3 + fwdX * 0.5;
+    const originY = player.y + 1.5;
+    const originZ = player.z + rightZ * 0.3 + fwdZ * 0.5;
+
+    for (let i = 0; i < weaponDef.pellets; i++) {
+      const proj = new ProjectileSchema();
+      proj.id = `proj_${++projectileCounter}`;
+      proj.ownerId = player.id;
+      proj.weaponId = weaponDef.id;
+      proj.gravity = weaponDef.gravity;
+      proj.maxAge = weaponDef.maxAge;
+      proj.x = originX;
+      proj.y = originY;
+      proj.z = originZ;
+
+      let pdx = dirX, pdy = dirY, pdz = dirZ;
+      if (weaponDef.spread > 0) {
+        pdx += (Math.random() - 0.5) * weaponDef.spread;
+        pdy += (Math.random() - 0.5) * weaponDef.spread;
+        pdz += (Math.random() - 0.5) * weaponDef.spread;
+        const len = Math.sqrt(pdx * pdx + pdy * pdy + pdz * pdz);
+        pdx /= len; pdy /= len; pdz /= len;
+      }
+
+      proj.vx = pdx * weaponDef.speed;
+      proj.vy = pdy * weaponDef.speed;
+      proj.vz = pdz * weaponDef.speed;
+
+      this.state.projectiles.push(proj);
+    }
   }
 
   // === COLLISION HELPERS ===
