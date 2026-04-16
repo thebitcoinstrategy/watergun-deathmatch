@@ -1,23 +1,16 @@
-const CACHE_NAME = 'aquastrike-v1';
+const CACHE_NAME = 'aquastrike-v2';
 
-// Core assets to precache on install (shell of the app)
-const PRECACHE_URLS = [
-  '/',
-  '/manifest.json',
-];
-
-// Install: cache the app shell
+// Install: skip waiting immediately, cache in background
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
-  );
-  // Activate immediately
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) =>
+      cache.addAll(['/', '/manifest.json']).catch(() => {})
+    )
+  );
 });
 
-// Activate: clean up old caches
+// Activate: clean up old caches, take control
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
@@ -26,14 +19,11 @@ self.addEventListener('activate', (event) => {
           .filter((key) => key !== CACHE_NAME)
           .map((key) => caches.delete(key))
       )
-    )
+    ).then(() => self.clients.claim())
   );
-  // Take control of all pages immediately
-  self.clients.claim();
 });
 
-// Fetch: stale-while-revalidate for all same-origin requests
-// This ensures offline play works while keeping assets fresh
+// Fetch: network-first for navigations, stale-while-revalidate for assets
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
@@ -41,7 +31,7 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
   if (new URL(request.url).origin !== self.location.origin) return;
 
-  // For navigation requests, try network first (short timeout), fall back to cache
+  // Navigation: network first, fall back to cache
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -55,7 +45,7 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For assets: serve from cache, update in background
+  // Assets: serve from cache, update in background
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) =>
       cache.match(request).then((cached) => {
