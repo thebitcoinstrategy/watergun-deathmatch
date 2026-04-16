@@ -3,16 +3,49 @@ import { setupLobby } from './ui/LobbyScreen';
 import { NetworkClient } from './networking/Client';
 import type { MapId } from '@watergun/shared';
 
+// --- PWA Debug Log (visible overlay on mobile) ---
+const debugLines: string[] = [];
+function pwaLog(msg: string) {
+  const ts = new Date().toLocaleTimeString();
+  const line = `[${ts}] ${msg}`;
+  console.log('[PWA]', msg);
+  debugLines.push(line);
+  const el = document.getElementById('pwa-debug');
+  if (el) el.textContent = debugLines.slice(-15).join('\n');
+}
+
 // Register service worker
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  pwaLog('Registering SW...');
+  navigator.serviceWorker.register('/sw.js')
+    .then((reg) => {
+      pwaLog(`SW registered, scope: ${reg.scope}`);
+      pwaLog(`SW state: installing=${!!reg.installing} waiting=${!!reg.waiting} active=${!!reg.active}`);
+      reg.addEventListener('updatefound', () => {
+        pwaLog('SW updatefound event');
+        const sw = reg.installing;
+        if (sw) {
+          sw.addEventListener('statechange', () => {
+            pwaLog(`SW state changed: ${sw.state}`);
+          });
+        }
+      });
+    })
+    .catch((err) => pwaLog(`SW register failed: ${err}`));
+} else {
+  pwaLog('No SW support');
 }
 
 // Capture the beforeinstallprompt event for the install button
 let deferredPrompt: any = null;
 window.addEventListener('beforeinstallprompt', (e) => {
+  pwaLog('beforeinstallprompt fired');
   e.preventDefault();
   deferredPrompt = e;
+});
+
+window.addEventListener('appinstalled', () => {
+  pwaLog('appinstalled event fired — PWA installed successfully!');
 });
 
 function isStandalone(): boolean {
@@ -40,15 +73,23 @@ function showInstallScreen(): Promise<void> {
     }
 
     btnInstall.addEventListener('click', async () => {
+      pwaLog(`Install clicked, deferredPrompt=${!!deferredPrompt}`);
       if (deferredPrompt) {
+        pwaLog('Calling prompt()...');
         deferredPrompt.prompt();
+        pwaLog('Waiting for userChoice...');
         const result = await deferredPrompt.userChoice;
+        pwaLog(`userChoice outcome: ${result.outcome}`);
         deferredPrompt = null;
         if (result.outcome === 'accepted') {
+          pwaLog('User accepted install');
           screen.style.display = 'none';
           resolve();
           return;
         }
+        pwaLog('User dismissed install');
+      } else {
+        pwaLog('No deferredPrompt available — cannot trigger install');
       }
       // If prompt wasn't available or was dismissed, continue anyway
       screen.style.display = 'none';

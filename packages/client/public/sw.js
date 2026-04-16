@@ -1,17 +1,14 @@
-const CACHE_NAME = 'aquastrike-v2';
+const CACHE_NAME = 'aquastrike-v3';
 
-// Install: skip waiting immediately, cache in background
+// Install: activate immediately, don't block on caching
 self.addEventListener('install', (event) => {
+  console.log('[SW] install event fired');
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(['/', '/manifest.json']).catch(() => {})
-    )
-  );
 });
 
 // Activate: clean up old caches, take control
 self.addEventListener('activate', (event) => {
+  console.log('[SW] activate event fired');
   event.waitUntil(
     caches.keys().then((keys) =>
       Promise.all(
@@ -23,43 +20,24 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch: network-first for navigations, stale-while-revalidate for assets
+// Fetch: only intercept navigations for offline fallback
+// Let everything else go straight to network to avoid interfering with PWA install
 self.addEventListener('fetch', (event) => {
   const { request } = event;
 
-  // Skip non-GET and cross-origin requests (e.g. Colyseus WebSocket)
+  // Only handle same-origin GET navigation requests
   if (request.method !== 'GET') return;
   if (new URL(request.url).origin !== self.location.origin) return;
+  if (request.mode !== 'navigate') return;
 
   // Navigation: network first, fall back to cache
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-          return response;
-        })
-        .catch(() => caches.match(request).then((r) => r || caches.match('/')))
-    );
-    return;
-  }
-
-  // Assets: serve from cache, update in background
   event.respondWith(
-    caches.open(CACHE_NAME).then((cache) =>
-      cache.match(request).then((cached) => {
-        const fetchPromise = fetch(request)
-          .then((response) => {
-            if (response.ok) {
-              cache.put(request, response.clone());
-            }
-            return response;
-          })
-          .catch(() => cached);
-
-        return cached || fetchPromise;
+    fetch(request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+        return response;
       })
-    )
+      .catch(() => caches.match(request).then((r) => r || caches.match('/')))
   );
 });
