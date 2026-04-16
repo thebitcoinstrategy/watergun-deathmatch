@@ -3,7 +3,7 @@
   "short_name": "AquaStrike",
   "description": "Multiplayer 3D water gun deathmatch — blocky characters, browser & mobile",
   "start_url": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "any",
   "background_color": "#01579b",
   "theme_color": "#0288d1",
