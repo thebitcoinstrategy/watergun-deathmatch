@@ -14,39 +14,58 @@ function pwaLog(msg: string) {
   if (el) el.textContent = debugLines.slice(-15).join('\n');
 }
 
-// Register service worker
-if ('serviceWorker' in navigator) {
-  pwaLog('Registering SW...');
-  navigator.serviceWorker.register('/sw.js')
-    .then((reg) => {
-      pwaLog(`SW registered, scope: ${reg.scope}`);
-      pwaLog(`SW state: installing=${!!reg.installing} waiting=${!!reg.waiting} active=${!!reg.active}`);
-      reg.addEventListener('updatefound', () => {
-        pwaLog('SW updatefound event');
-        const sw = reg.installing;
-        if (sw) {
-          sw.addEventListener('statechange', () => {
-            pwaLog(`SW state changed: ${sw.state}`);
-          });
-        }
-      });
-    })
-    .catch((err) => pwaLog(`SW register failed: ${err}`));
-} else {
-  pwaLog('No SW support');
-}
-
 // Capture the beforeinstallprompt event for the install button
 let deferredPrompt: any = null;
+let installPromptResolve: (() => void) | null = null;
+
 window.addEventListener('beforeinstallprompt', (e) => {
-  pwaLog('beforeinstallprompt fired');
+  pwaLog('beforeinstallprompt fired!');
   e.preventDefault();
   deferredPrompt = e;
+  // If the install screen is already waiting for this, unblock it
+  if (installPromptResolve) {
+    installPromptResolve();
+    installPromptResolve = null;
+  }
 });
 
 window.addEventListener('appinstalled', () => {
-  pwaLog('appinstalled event fired — PWA installed successfully!');
+  pwaLog('appinstalled event — PWA installed!');
 });
+
+// Register service worker and wait until it's active
+async function registerSW(): Promise<void> {
+  if (!('serviceWorker' in navigator)) {
+    pwaLog('No SW support');
+    return;
+  }
+  pwaLog('Registering SW...');
+  try {
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    pwaLog(`SW registered, scope: ${reg.scope}`);
+    pwaLog(`SW state: installing=${!!reg.installing} waiting=${!!reg.waiting} active=${!!reg.active}`);
+
+    // Wait for the SW to become active if it isn't yet
+    if (!reg.active) {
+      const sw = reg.installing || reg.waiting;
+      if (sw) {
+        await new Promise<void>((resolve) => {
+          sw.addEventListener('statechange', () => {
+            pwaLog(`SW state changed: ${sw.state}`);
+            if (sw.state === 'activated') resolve();
+          });
+        });
+      }
+    }
+    pwaLog('SW is active');
+
+    // Also wait for navigator.serviceWorker.ready (belt and suspenders)
+    await navigator.serviceWorker.ready;
+    pwaLog('SW ready');
+  } catch (err) {
+    pwaLog(`SW register failed: ${err}`);
+  }
+}
 
 function isStandalone(): boolean {
   return window.matchMedia('(display-mode: standalone)').matches
@@ -57,21 +76,40 @@ function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
 }
 
-function showInstallScreen(): Promise<void> {
+async function showInstallScreen(): Promise<void> {
+  const screen = document.getElementById('install-screen')!;
+  const btnInstall = document.getElementById('btn-install')!;
+  const btnSkip = document.getElementById('btn-skip-install')!;
+  const iosHint = document.getElementById('install-ios-hint')!;
+
+  // Register SW and wait for it to be active first
+  await registerSW();
+
+  // If beforeinstallprompt hasn't fired yet, wait up to 5 seconds for it
+  if (!deferredPrompt) {
+    pwaLog('Waiting for beforeinstallprompt (up to 5s)...');
+    await Promise.race([
+      new Promise<void>((resolve) => { installPromptResolve = resolve; }),
+      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    ]);
+    installPromptResolve = null;
+  }
+
+  if (!deferredPrompt && !isIOS()) {
+    pwaLog('beforeinstallprompt never fired — skipping install screen');
+    // Browser doesn't consider app installable or it's already installed
+    return;
+  }
+
+  pwaLog(`Showing install screen, deferredPrompt=${!!deferredPrompt}, isIOS=${isIOS()}`);
+  screen.style.display = 'flex';
+
+  if (isIOS()) {
+    btnInstall.style.display = 'none';
+    iosHint.style.display = 'block';
+  }
+
   return new Promise((resolve) => {
-    const screen = document.getElementById('install-screen')!;
-    const btnInstall = document.getElementById('btn-install')!;
-    const btnSkip = document.getElementById('btn-skip-install')!;
-    const iosHint = document.getElementById('install-ios-hint')!;
-
-    screen.style.display = 'flex';
-
-    if (isIOS()) {
-      // iOS doesn't support beforeinstallprompt — show manual instructions
-      btnInstall.style.display = 'none';
-      iosHint.style.display = 'block';
-    }
-
     btnInstall.addEventListener('click', async () => {
       pwaLog(`Install clicked, deferredPrompt=${!!deferredPrompt}`);
       if (deferredPrompt) {
@@ -88,10 +126,7 @@ function showInstallScreen(): Promise<void> {
           return;
         }
         pwaLog('User dismissed install');
-      } else {
-        pwaLog('No deferredPrompt available — cannot trigger install');
       }
-      // If prompt wasn't available or was dismissed, continue anyway
       screen.style.display = 'none';
       resolve();
     });
@@ -115,7 +150,10 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || (isDev
 async function main() {
   // Show install prompt if not already installed as PWA
   if (!isStandalone()) {
+    pwaLog(`standalone=${isStandalone()}, iOS=${isIOS()}`);
     await showInstallScreen();
+  } else {
+    pwaLog('Running as installed PWA — skipping install screen');
   }
 
   const result = await setupLobby();
