@@ -59,11 +59,25 @@ async function registerSW(): Promise<void> {
     }
     pwaLog('SW is active');
 
-    // Also wait for navigator.serviceWorker.ready (belt and suspenders)
+    // Also wait for navigator.serviceWorker.ready
     await navigator.serviceWorker.ready;
     pwaLog('SW ready');
+
+    // Verify offline capability — can the SW serve start_url from cache?
+    const cache = await caches.open('aquastrike-v4');
+    const cached = await cache.match('/');
+    pwaLog(`Offline check: / in cache = ${!!cached}`);
   } catch (err) {
     pwaLog(`SW register failed: ${err}`);
+  }
+
+  // Check manifest is loadable
+  try {
+    const resp = await fetch('/manifest.json');
+    const manifest = await resp.json();
+    pwaLog(`Manifest OK: name=${manifest.name}, display=${manifest.display}, icons=${manifest.icons?.length}`);
+  } catch (err) {
+    pwaLog(`Manifest fetch failed: ${err}`);
   }
 }
 
@@ -87,10 +101,10 @@ async function showInstallScreen(): Promise<void> {
 
   // If beforeinstallprompt hasn't fired yet, wait up to 5 seconds for it
   if (!deferredPrompt) {
-    pwaLog('Waiting for beforeinstallprompt (up to 5s)...');
+    pwaLog('Waiting for beforeinstallprompt (up to 10s)...');
     await Promise.race([
       new Promise<void>((resolve) => { installPromptResolve = resolve; }),
-      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+      new Promise<void>((resolve) => setTimeout(resolve, 10000)),
     ]);
     installPromptResolve = null;
   }
