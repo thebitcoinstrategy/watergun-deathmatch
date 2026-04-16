@@ -3,6 +3,65 @@ import { setupLobby } from './ui/LobbyScreen';
 import { NetworkClient } from './networking/Client';
 import type { MapId } from '@watergun/shared';
 
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
+// Capture the beforeinstallprompt event for the install button
+let deferredPrompt: any = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+});
+
+function isStandalone(): boolean {
+  return window.matchMedia('(display-mode: standalone)').matches
+    || (navigator as any).standalone === true;
+}
+
+function isIOS(): boolean {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+}
+
+function showInstallScreen(): Promise<void> {
+  return new Promise((resolve) => {
+    const screen = document.getElementById('install-screen')!;
+    const btnInstall = document.getElementById('btn-install')!;
+    const btnSkip = document.getElementById('btn-skip-install')!;
+    const iosHint = document.getElementById('install-ios-hint')!;
+
+    screen.style.display = 'flex';
+
+    if (isIOS()) {
+      // iOS doesn't support beforeinstallprompt — show manual instructions
+      btnInstall.style.display = 'none';
+      iosHint.style.display = 'block';
+    }
+
+    btnInstall.addEventListener('click', async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const result = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (result.outcome === 'accepted') {
+          screen.style.display = 'none';
+          resolve();
+          return;
+        }
+      }
+      // If prompt wasn't available or was dismissed, continue anyway
+      screen.style.display = 'none';
+      resolve();
+    });
+
+    btnSkip.addEventListener('click', () => {
+      screen.style.display = 'none';
+      resolve();
+    });
+  });
+}
+
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 
 // Auto-detect server URL: in production (same origin), use page host; in dev, use port 2567
@@ -13,6 +72,11 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || (isDev
   : `${wsProtocol}//${window.location.host}`);
 
 async function main() {
+  // Show install prompt if not already installed as PWA
+  if (!isStandalone()) {
+    await showInstallScreen();
+  }
+
   const result = await setupLobby();
   const statusEl = document.getElementById('connection-status')!;
 
