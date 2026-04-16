@@ -235,8 +235,6 @@
     </div>
   </div>
 
-  <pre id="pwa-debug" style="position:fixed;bottom:0;left:0;right:0;background:rgba(0,0,0,0.85);color:#0f0;font-size:11px;padding:8px;z-index:9999;max-height:40vh;overflow-y:auto;pointer-events:none;font-family:monospace;white-space:pre-wrap;"></pre>
-
   <div id="install-screen">
     <div class="install-card">
       <img src="/icons/icon-192x192.png" alt="AquaStrike" class="install-icon" />
@@ -244,6 +242,9 @@
       <p class="install-subtitle">Multiplayer 3D Water Gun Deathmatch</p>
       <p class="install-desc">Install AquaStrike for the best experience — fullscreen, no browser bar, instant launch from your home screen.</p>
       <button id="btn-install" class="lobby-btn btn-create install-btn">Install App</button>
+      <p id="install-waiting-hint" class="install-ios-hint" style="display:none;">
+        If nothing happens, use your browser menu (<strong>&#8942;</strong>) and tap <strong>"Install app"</strong> or <strong>"Add to Home Screen"</strong>.
+      </p>
       <button id="btn-skip-install" class="install-skip">Continue in Browser</button>
       <p id="install-ios-hint" class="install-ios-hint" style="display:none;">
         Tap <strong>Share</strong> then <strong>"Add to Home Screen"</strong> to install.
